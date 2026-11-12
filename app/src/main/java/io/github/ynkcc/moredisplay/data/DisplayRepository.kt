@@ -32,14 +32,14 @@ import io.github.ynkcc.moredisplay.dispatch.flatMapCatching
 import java.util.concurrent.Executors
 
 /**
- * 多通道并行的显示仓库：Shizuku 与 LSPosed 守护可**同时**连接，
- * 各自创建/管理各自的虚拟屏。
+ * Multi-channel display repository: the Shizuku and Xposed (Vector/LSPosed) daemons can be connected **at the same time**,
+ * each creating/managing its own virtual displays.
  *
- * - 每个可用 provider 独立占一个槽位（[Slot]），连接互不影响、单通道失败不拖垮整体；
- * - displayId 由 DMS 全局分配不会撞号，仓库内用 [origin] 记录每块屏归属哪个通道，
- *   create/list 时登记，remove/hold 时优先路由回原通道（未知归属则按优先级逐通道兜底）；
- * - 策略类操作（per-uid 可见性 / displaysForUid）只在 system_server 守护内生效
- *   （hook 与 DisplayPolicyRegistry 都在那里），固定路由到 LSPosed 槽位。
+ * - each available provider occupies its own slot ([Slot]); connections are independent and one channel failing doesn't bring down the rest;
+ * - displayIds are allocated globally by DMS and never collide; the repository records which channel owns each display in [origin],
+ *   registering on create/list and routing remove/hold back to the owning channel first (unknown owners fall back channel by channel in priority order);
+ * - policy operations (per-uid visibility / displaysForUid) only work inside the system_server daemon
+ *   (both the hooks and DisplayPolicyRegistry live there), so they are always routed to the Xposed slot.
  */
 class DisplayRepository : IDisplayRepository {
 
@@ -47,7 +47,7 @@ class DisplayRepository : IDisplayRepository {
         private const val TAG = "DisplayRepository"
     }
 
-    /** 一条已连接的守护通道。 */
+    /** A connected daemon channel. */
     private class Slot(
         val provider: DaemonProvider,
         val transport: Transport,
@@ -69,10 +69,10 @@ class DisplayRepository : IDisplayRepository {
     )
     private val modes = MutableStateFlow<Map<Privilege, WorkModeInfo>>(emptyMap())
 
-    /** privilege → 已连接槽位。仅在 [slotDispatcher] 单线程内读写。 */
+    /** privilege -> connected slot. Read and written only on the single [slotDispatcher] thread. */
     private val slots = mutableMapOf<Privilege, Slot>()
 
-    /** displayId → 创建它的通道 privilege。仅在 [slotDispatcher] 单线程内写，读取走 StateFlow。 */
+    /** displayId -> privilege of the channel that created it. Written only on the single [slotDispatcher] thread; reads go through StateFlow. */
     private val origin = MutableStateFlow<Map<Int, Privilege>>(emptyMap())
 
     override val displaysByChannel: StateFlow<Map<Privilege, List<DisplayInfo>>> =
@@ -93,9 +93,9 @@ class DisplayRepository : IDisplayRepository {
     }
 
     /**
-     * 连接所有可用 provider（已连接的跳过）。任意一条成功即返回 success；
-     * 全部失败才返回 failure。支持渐进接入：例如先连 LSPosed，之后 Shizuku
-     * 就绪后再调 connect() 即可补上第二条通道。
+     * Connects all available providers (already connected ones are skipped). Returns success if any one succeeds;
+     * returns failure only if all fail. Supports incremental connection: e.g. connect the Xposed channel first, then once Shizuku
+     * is ready call connect() again to add the second channel.
      */
     override suspend fun connect(): Result<Unit> = withContext(slotDispatcher) {
         if (status.value != ConnectionStatus.CONNECTED) status.value = ConnectionStatus.BINDING
@@ -114,14 +114,14 @@ class DisplayRepository : IDisplayRepository {
         }
     }
 
-    /** 补齐所有「可用但尚未连接」的 provider，单个失败仅记录不中断。 */
+     * Connects every provider that is "available but not yet connected"; a single failure is only recorded and doesn't interrupt.
     private suspend fun connectMissingSlots(): List<String> {
         val errors = mutableListOf<String>()
         for (provider in DispatchCenter.activeProviders()) {
             if (slots.containsKey(provider.privilege)) continue
             provider.startDaemon().flatMapCatching { provider.connectTransport() }
                 .onSuccess { t ->
-                    // 能力以 daemon 实测为准（特权 flag 因 ROM 权限而异），失败则回退静态矩阵。
+                    // Capabilities come from what the daemon actually measures (privileged flags vary with ROM permissions); on failure fall back to the static matrix.
                     val capabilities = queryCapabilities(t)
                         ?: CapabilityMatrix.forPrivilege(provider.privilege)
                     val workMode = WorkModeInfo(
@@ -144,7 +144,7 @@ class DisplayRepository : IDisplayRepository {
         return errors
     }
 
-    /** 移除一条通道（transport 断开或主动断连时）。全部断开则整体回到 DISCONNECTED。 */
+    /** Removes a channel (when the transport disconnects or is disconnected deliberately). If all are disconnected, the whole state returns to DISCONNECTED. */
     private suspend fun dropSlot(privilege: Privilege, reason: String) = withContext(slotDispatcher) {
         val slot = slots.remove(privilege) ?: return@withContext
         runCatching { slot.transport.close() }
@@ -206,7 +206,7 @@ class DisplayRepository : IDisplayRepository {
         Result.failure(IllegalStateException("remove $displayId: ${last?.message()}"))
     }
 
-    /** 合并所有通道的托管屏列表，并刷新 origin 归属表。 */
+    /** Merges the managed display lists of all channels and refreshes the origin ownership table. */
     override suspend fun listDisplays(): Result<List<DisplayInfo>> = withContext(slotDispatcher) {
         if (slots.isEmpty()) {
             return@withContext Result.failure(IllegalStateException("not connected"))
@@ -234,7 +234,7 @@ class DisplayRepository : IDisplayRepository {
 
     override fun displayOrigin(displayId: Int): Privilege? = origin.value[displayId]
 
-    // ---- 策略类操作：只在 system_server 守护（LSPosed 槽位）内生效 ----
+    // ---- Policy operations: only effective inside the system_server daemon (Xposed slot) ----
 
     override suspend fun setDisplayPolicy(policy: DisplayPolicy): Result<DisplayPolicy> {
         val response = callSystemServer { RpcRequest.SetDisplayPolicy(nextId(), policy) }
@@ -279,7 +279,7 @@ class DisplayRepository : IDisplayRepository {
         slotDispatcher.close()
     }
 
-    // ---- 内部工具 ----
+    // ---- Internal helpers ----
 
     private suspend fun sendOn(slot: Slot, build: () -> RpcRequest): RpcResponse =
         runCatching { slot.transport.send(build()) }.getOrElse { e ->
@@ -293,7 +293,7 @@ class DisplayRepository : IDisplayRepository {
         return (response as? RpcResponse.Capabilities)?.capabilities
     }
 
-    /** 指定 privilege 的槽位；null 则取最高优先级的已连接槽位。指定了但未连接时返回 null（不回退）。 */
+    /** Slot for the given privilege; null means the highest-priority connected slot. Returns null (no fallback) if specified but not connected. */
     private fun slotFor(privilege: Privilege?): Slot? = when (privilege) {
         null -> primarySlot()
         else -> slots[privilege]
@@ -302,19 +302,19 @@ class DisplayRepository : IDisplayRepository {
     private fun primarySlot(): Slot? =
         slots.values.maxByOrNull { it.provider.priority }
 
-    /** remove/hold 的路由顺序：已知归属的槽位优先，其余按优先级兜底。 */
+    /** Routing order for remove/hold: slots with known ownership first, the rest as a priority-ordered fallback. */
     private fun orderedSlotsFor(displayId: Int): List<Slot> {
         val known = origin.value[displayId]?.let { slots[it] }
         val rest = slots.values.filter { it !== known }.sortedByDescending { it.provider.priority }
         return if (known != null) listOf(known) + rest else rest
     }
 
-    /** 策略/可见性查询固定走 system_server 守护；未连接 LSPosed 时明确报错。 */
+    /** Policy/visibility queries always go to the system_server daemon; an explicit error is raised if the Xposed channel isn't connected. */
     private suspend fun callSystemServer(build: () -> RpcRequest): RpcResponse = withContext(slotDispatcher) {
         val slot = slots[Privilege.LSPOSED]
             ?: return@withContext RpcResponse.Error(
                 0, -1,
-                "LSPosed daemon not connected (policy ops require system_server daemon, connected=${slots.keys})"
+                "Xposed (Vector/LSPosed) daemon not connected (policy ops require system_server daemon, connected=${slots.keys})"
             )
         sendOn(slot, build)
     }
