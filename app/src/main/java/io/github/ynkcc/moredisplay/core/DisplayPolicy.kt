@@ -1,19 +1,19 @@
 package io.github.ynkcc.moredisplay.core
 
 /**
- * 某个调用方（按 uid，可附带包名）对屏幕的可见性语义。
+ * Display visibility semantics for a given caller (by uid, optionally with a package name).
  *
- * 设计取舍：**不能**用平台的 `FLAG_PRIVATE` / `ownerUid` 表达任意 per-uid 白黑名单
- * （那只能表达“仅创建者可见”），所以必须在 DisplayManagerService 返回结果处裁剪。
+ * Design trade-off: the platform's `FLAG_PRIVATE` / `ownerUid` **cannot** express arbitrary per-uid white/blacklists
+ * (it can only express "visible to the creator only"), so results must be filtered where DisplayManagerService returns them.
  */
 enum class Visibility {
-    /** 不做任何过滤（默认；没有策略条目时即此语义）。 */
+    /** No filtering at all (the default; also the meaning when there is no policy entry). */
     ALL,
 
-    /** 白名单：调用方**只能**看到 [DisplayPolicy.displayIds] 里的屏幕。 */
+    /** Whitelist: the caller can **only** see the displays in [DisplayPolicy.displayIds]. */
     ONLY,
 
-    /** 黑名单：调用方**看不到** [DisplayPolicy.displayIds] 里的屏幕。 */
+    /** Blacklist: the caller **cannot see** the displays in [DisplayPolicy.displayIds]. */
     HIDE;
 
     companion object {
@@ -23,7 +23,7 @@ enum class Visibility {
 }
 
 /**
- * 可见性策略条目。以 [uid] 为主键（[packageName] 仅作展示/可读性）。
+ * Visibility policy entry. Keyed by [uid] ([packageName] is for display/readability only).
  *
  */
 data class DisplayPolicy(

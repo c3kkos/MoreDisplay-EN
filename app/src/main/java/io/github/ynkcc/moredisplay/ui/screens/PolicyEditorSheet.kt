@@ -56,8 +56,8 @@ import io.github.ynkcc.moredisplay.core.Visibility
 import io.github.ynkcc.moredisplay.ui.viewmodel.AppEntry
 
 /**
- * 卡片式策略编辑表单（[editing] 为 null 表示新建，非 null 表示编辑既有策略；
- * 保存按 uid upsert，编辑模式额外提供删除入口）。
+ * Card-style policy editor form ([editing] null means create, non-null means edit an existing policy;
+ * saving upserts by uid, and edit mode additionally offers a delete button).
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -98,12 +98,12 @@ internal fun PolicyEditorSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                if (editing == null) "添加策略" else "编辑策略",
+                if (editing == null) "Add policy" else "Edit policy",
                 style = MaterialTheme.typography.titleLarge
             )
 
-            // —— 目标应用 ——
-            Text("目标应用", style = MaterialTheme.typography.titleSmall)
+            // -- Target app --
+            Text("Target app", style = MaterialTheme.typography.titleSmall)
             OutlinedCard(onClick = { showPicker = true }, modifier = Modifier.fillMaxWidth()) {
                 Row(
                     modifier = Modifier
@@ -116,9 +116,9 @@ internal fun PolicyEditorSheet(
                     val app = selectedApp
                     Column(Modifier.weight(1f)) {
                         if (app == null) {
-                            Text("点击选择应用", style = MaterialTheme.typography.bodyLarge)
+                            Text("Tap to choose an app", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "也可在下方手动填写 uid（如系统 uid）",
+                                "You can also enter a uid manually below (e.g. a system uid)",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -149,13 +149,13 @@ internal fun PolicyEditorSheet(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 isError = uidText.isNotEmpty() && !valid,
                 supportingText = {
-                    if (uidText.isNotEmpty() && !valid) Text("uid 必须是非负整数")
+                    if (uidText.isNotEmpty() && !valid) Text("uid must be a non-negative integer")
                 },
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // —— 可见性 ——
-            Text("可见性", style = MaterialTheme.typography.titleSmall)
+            // -- Visibility --
+            Text("Visibility", style = MaterialTheme.typography.titleSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Visibility.entries.forEach { v ->
                     FilterChip(
@@ -170,20 +170,20 @@ internal fun PolicyEditorSheet(
             }
             Text(
                 when (visibility) {
-                    Visibility.ALL -> "不限制：该应用可以看到所有屏幕。"
-                    Visibility.ONLY -> "白名单：该应用只能看到勾选的屏幕。"
-                    Visibility.HIDE -> "黑名单：该应用看不到勾选的屏幕。"
+                    Visibility.ALL -> "Unrestricted: the app can see all displays."
+                    Visibility.ONLY -> "Whitelist: the app can only see the checked displays."
+                    Visibility.HIDE -> "Blacklist: the app cannot see the checked displays."
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            // —— 适用屏幕（ALL 时无意义，隐藏） ——
+            // -- Applicable displays (meaningless for ALL, so hidden) --
             if (visibility != Visibility.ALL) {
-                Text("适用屏幕", style = MaterialTheme.typography.titleSmall)
+                Text("Applicable displays", style = MaterialTheme.typography.titleSmall)
                 if (displayIds.isEmpty()) {
                     Text(
-                        "暂无受管显示，先在「显示器」页创建",
+                        "No managed displays yet; create one on the Displays page first",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -203,10 +203,10 @@ internal fun PolicyEditorSheet(
                 }
             }
 
-            // —— 录屏替换 ——
-            Text("录屏替换", style = MaterialTheme.typography.titleSmall)
+            // -- Recording redirect --
+            Text("Recording redirect", style = MaterialTheme.typography.titleSmall)
             Text(
-                "录屏来源重定向到勾选的屏幕",
+                "Redirect the screen-recording source to the selected display",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -217,10 +217,10 @@ internal fun PolicyEditorSheet(
                 onSelect = { record = it }
             )
 
-            // —— 无障碍替换 ——
-            Text("无障碍替换", style = MaterialTheme.typography.titleSmall)
+            // -- Accessibility redirect --
+            Text("Accessibility redirect", style = MaterialTheme.typography.titleSmall)
             Text(
-                "无障碍手势重定向到勾选的屏幕",
+                "Redirect accessibility gestures to the selected display",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -231,7 +231,7 @@ internal fun PolicyEditorSheet(
                 onSelect = { operated = it }
             )
 
-            // —— 操作 ——
+            // -- Actions --
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     enabled = valid && !busy,
@@ -248,11 +248,11 @@ internal fun PolicyEditorSheet(
                             )
                         )
                     }
-                ) { Text("保存") }
-                OutlinedButton(onClick = onDismiss) { Text("取消") }
+                ) { Text("Save") }
+                OutlinedButton(onClick = onDismiss) { Text("Cancel") }
                 if (onDelete != null) {
                     TextButton(onClick = { confirmDelete = true }) {
-                        Text("删除", color = MaterialTheme.colorScheme.error)
+                        Text("Delete", color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
@@ -274,21 +274,21 @@ internal fun PolicyEditorSheet(
     if (confirmDelete && onDelete != null) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("删除策略") },
-            text = { Text("确认删除 uid=$uid 的策略？删除后该应用恢复默认可见性。") },
+            title = { Text("Delete policy") },
+            text = { Text("Delete the policy for uid=$uid? The app goes back to default visibility.") },
             confirmButton = {
                 TextButton(onClick = { confirmDelete = false; onDelete() }) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("取消") }
+                TextButton(onClick = { confirmDelete = false }) { Text("Cancel") }
             }
         )
     }
 }
 
-/** 替换类单选 chips：「不替换」+ 各受管屏。 */
+/** Single-choice redirect chips: "No redirect" + each managed display. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RedirectChips(
@@ -301,7 +301,7 @@ private fun RedirectChips(
         FilterChip(
             selected = selected == -1,
             onClick = { onSelect(-1) },
-            label = { Text("不替换") }
+            label = { Text("No redirect") }
         )
         displayIds.forEach { id ->
             FilterChip(
@@ -313,7 +313,7 @@ private fun RedirectChips(
     }
 }
 
-/** 应用选择器：搜索（名称 / 包名 / uid）+ 可滚动列表。 */
+/** App picker: search (name / package / uid) + scrollable list. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppPickerSheet(
@@ -328,7 +328,7 @@ private fun AppPickerSheet(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text("搜索应用 / 包名 / uid") },
+                label = { Text("Search app / package / uid") },
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 modifier = Modifier
@@ -344,7 +344,7 @@ private fun AppPickerSheet(
                 ) { CircularProgressIndicator() }
 
                 apps.isEmpty() -> Text(
-                    "未读取到已安装应用",
+                    "No installed apps could be read",
                     Modifier.padding(24.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -358,7 +358,7 @@ private fun AppPickerSheet(
                     }
                     if (filtered.isEmpty()) {
                         Text(
-                            "无匹配应用",
+                            "No matching apps",
                             Modifier.padding(24.dp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -408,7 +408,7 @@ private fun AppRow(app: AppEntry, onClick: () -> Unit) {
     }
 }
 
-/** 应用图标：按包名懒加载并栅格化；取不到时显示占位圆。 */
+/** App icon: lazily loaded by package name and rasterized; shows a placeholder circle if unavailable. */
 @Composable
 internal fun AppIcon(packageName: String?, size: Int) {
     val context = LocalContext.current
@@ -448,7 +448,7 @@ internal fun displayLabel(displays: Map<Int, DisplayInfo>, id: Int): String {
 }
 
 internal fun visibilityLabel(v: Visibility): String = when (v) {
-    Visibility.ALL -> "全部"
-    Visibility.ONLY -> "仅白名单"
-    Visibility.HIDE -> "黑名单"
+    Visibility.ALL -> "All"
+    Visibility.ONLY -> "Whitelist only"
+    Visibility.HIDE -> "Blacklist"
 }

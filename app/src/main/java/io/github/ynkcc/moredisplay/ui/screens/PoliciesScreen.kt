@@ -47,7 +47,7 @@ import io.github.ynkcc.moredisplay.ui.viewmodel.PoliciesViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
-/** 列表轮询周期（ms），与「显示器」页一致。 */
+/** List polling interval (ms), same as the Displays page. */
 private const val REFRESH_INTERVAL_MS = 3000L
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,7 +62,7 @@ fun PoliciesScreen(
     val displays by vm.displays.collectAsStateWithLifecycle()
     val apps by vm.installedApps.collectAsStateWithLifecycle()
 
-    // 编辑器状态：editing = null 新建；非 null 编辑既有策略（按 uid upsert）。
+    // Editor state: editing = null creates new; non-null edits an existing policy (upsert by uid).
     var showEditor by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<DisplayPolicy?>(null) }
     var pendingDelete by remember { mutableStateOf<DisplayPolicy?>(null) }
@@ -74,7 +74,7 @@ fun PoliciesScreen(
         }
     }
 
-    // 进入页面即重新拉取，并在可见期间轮询，保证与守护进程状态一致。
+    // Re-fetch on entering the page and poll while visible, to stay consistent with the daemon state.
     LaunchedEffect(Unit) {
         vm.reload()
         while (isActive) {
@@ -87,7 +87,7 @@ fun PoliciesScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = { editing = null; showEditor = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "添加策略")
+                Icon(Icons.Filled.Add, contentDescription = "Add policy")
             }
         }
     ) { padding ->
@@ -100,9 +100,9 @@ fun PoliciesScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text("暂无显示可见性策略", style = MaterialTheme.typography.titleMedium)
+                Text("No display visibility policies yet", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "策略按 uid 控制某个应用能看到哪些屏幕。",
+                    "A policy controls, per uid, which displays an app can see.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -157,11 +157,11 @@ fun PoliciesScreen(
     pendingDelete?.let { policy ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("删除策略") },
+            title = { Text("Delete policy") },
             text = {
                 Text(
-                    "确认删除 ${policy.packageName ?: "uid=${policy.uid}"} 的策略？" +
-                        "删除后该应用恢复默认可见性。"
+                    "Delete the policy for ${policy.packageName ?: "uid=${policy.uid}"}? " +
+                        "The app goes back to default visibility."
                 )
             },
             confirmButton = {
@@ -170,16 +170,16 @@ fun PoliciesScreen(
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error
                     )
-                ) { Text("删除") }
+                ) { Text("Delete") }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("取消") }
+                TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
             }
         )
     }
 }
 
-/** 策略卡片：应用图标 + 名称 + 可见性徽标 + 屏幕 chips；点卡片进入编辑。 */
+/** Policy card: app icon + name + visibility badge + display chips; tap the card to edit. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun PolicyCard(
@@ -213,7 +213,7 @@ private fun PolicyCard(
                     )
                 }
                 IconButton(onClick = onRemove, enabled = enabled) {
-                    Icon(Icons.Filled.Delete, contentDescription = "删除策略")
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete policy")
                 }
             }
             Row(
@@ -240,8 +240,8 @@ private fun PolicyCard(
                 }
             }
             val extras = listOfNotNull(
-                policy.recordDisplayId?.let { "录屏→#$it" },
-                policy.operatedDisplayId?.let { "无障碍→#$it" }
+                policy.recordDisplayId?.let { "Recording->#$it" },
+                policy.operatedDisplayId?.let { "A11y->#$it" }
             ).joinToString("  ")
             if (extras.isNotEmpty()) {
                 Text(
@@ -257,9 +257,9 @@ private fun PolicyCard(
 @Composable
 private fun VisibilityBadge(v: Visibility) {
     val (label, color) = when (v) {
-        Visibility.ALL -> "全部" to MaterialTheme.colorScheme.tertiary
-        Visibility.ONLY -> "仅白名单" to MaterialTheme.colorScheme.primary
-        Visibility.HIDE -> "黑名单" to MaterialTheme.colorScheme.error
+        Visibility.ALL -> "All" to MaterialTheme.colorScheme.tertiary
+        Visibility.ONLY -> "Whitelist only" to MaterialTheme.colorScheme.primary
+        Visibility.HIDE -> "Blacklist" to MaterialTheme.colorScheme.error
     }
     Surface(shape = MaterialTheme.shapes.small, color = color.copy(alpha = 0.12f)) {
         Text(

@@ -6,15 +6,15 @@ import io.github.ynkcc.moredisplay.core.DisplayPolicy
 import io.github.ynkcc.moredisplay.core.Visibility
 
 /**
- * 进程内策略表（LSPosed 模式下即 system_server 进程内）。
+ * In-process policy table (in Xposed mode this lives inside the system_server process).
  *
- * 与 `SystemDisplayEngine` 一样用 `LinkedHashMap` + `synchronized(lock)`，
- * 线程安全且保持插入顺序（`list` 输出稳定）。
+ * Like `SystemDisplayEngine`, it uses `LinkedHashMap` + `synchronized(lock)`:
+ * thread-safe and insertion-ordered (stable `list` output).
  *
- * ## 默认放行（硬约束）
- * - 没有任何条目 → 行为与未装模块完全一致；
- * - **非 App uid**（uid<10000：root/system/systemui/shell/mediaserver…）一律放行，
- *   绝不因为策略把系统搞挂。
+ * ## Pass-through by default (hard constraint)
+ * - No entries at all -> behaves exactly as without the module;
+ * - **Non-app uids** (uid<10000: root/system/systemui/shell/mediaserver...) are always passed through,
+ *   so a policy can never break the system.
  */
 object DisplayPolicyRegistry {
 
@@ -22,23 +22,23 @@ object DisplayPolicyRegistry {
 
     const val NO_POLICY_UID = -1
 
-    /** 多用户 uid 布局：uid = userId * 100000 + appId。 */
+    /** Multi-user uid layout: uid = userId * 100000 + appId. */
     private const val PER_USER_RANGE = 100000
 
     /**
-     * 默认屏（`Display.DEFAULT_DISPLAY`）**永不过滤**。
+     * The default display (`Display.DEFAULT_DISPLAY`) is **never filtered**.
      *
-     * 实测：如果把 display 0 从某个 App 的视野里摘掉，framework 的
-     * `com.android.internal.policy.DecorContext.<init>` 会拿到 null 的 `Display` 而 NPE
-     * （`Attempt to invoke virtual method 'int android.view.Display.getDisplayId()' on a null object reference`），
-     * 该 App 直接起不来。它也是调用方自身窗口所在屏，语义上不应该被隐藏。
-     * 需要「完全隔离」的场景请配合托管虚拟屏（把 App 启动到托管屏）而不是隐藏 display 0。
+     * Observed: if display 0 is removed from an app's view, the framework's
+     * `com.android.internal.policy.DecorContext.<init>` gets a null `Display` and throws an NPE
+     * (`Attempt to invoke virtual method 'int android.view.Display.getDisplayId()' on a null object reference`),
+     * and the app fails to start. It is also the display the caller's own window lives on, so semantically it must not be hidden.
+     * For "full isolation" scenarios, use a managed virtual display (launch the app onto it) instead of hiding display 0.
      */
     const val DEFAULT_DISPLAY_ID = 0
 
     /**
-     * 由 xposed 层注入的「Hook 命中计数」快照提供者（LSPosed 模式下才非空）。
-     * 用于在 `policy-list` / `displays-for-uid` 时打印「已装 vs 已生效」证据。
+     * Provider of the "hook hit counter" snapshot, injected by the xposed layer (non-null only in Xposed mode).
+     * Used to print "installed vs effective" evidence in `policy-list` / `displays-for-uid`.
      */
     @Volatile
     var statsProvider: (() -> String)? = null
@@ -46,7 +46,7 @@ object DisplayPolicyRegistry {
     private val lock = Any()
     private val policies = LinkedHashMap<Int, DisplayPolicy>()
 
-    /** [policedDisplayIds] 的缓存，避免在高频事件路径上反复分配集合。 */
+    /** Cache of [policedDisplayIds], to avoid allocating collections repeatedly on hot event paths. */
     @Volatile
     private var policedIds: Set<Int> = emptySet()
 
@@ -54,7 +54,7 @@ object DisplayPolicyRegistry {
         val sanitized = if (policy.visibility != Visibility.ALL &&
             policy.displayIds.contains(DEFAULT_DISPLAY_ID)
         ) {
-            Log.w(TAG, "策略 ${policy.describe()} 含默认屏 $DEFAULT_DISPLAY_ID，已忽略该项（默认屏永不过滤）")
+            Log.w(TAG, "Policy ${policy.describe()} contains default display $DEFAULT_DISPLAY_ID; entry ignored (the default display is never filtered)")
             policy.copy(displayIds = policy.displayIds - DEFAULT_DISPLAY_ID)
         } else {
             policy
@@ -79,7 +79,7 @@ object DisplayPolicyRegistry {
         rebuildPolicedIdsLocked()
     }
 
-    /** 所有策略里出现过的 displayId 并集（仅用于日志筛选，避免刷屏）。 */
+    /** Union of every displayId that appears in any policy (used only for log filtering, to avoid flooding). */
     fun policedDisplayIds(): Set<Int> = policedIds
 
     private fun rebuildPolicedIdsLocked() {
@@ -87,8 +87,8 @@ object DisplayPolicyRegistry {
     }
 
     /**
-     * 需求 B：该 uid 的录屏镜像目标屏。
-     * 只在「是 App uid 且配置了 recordDisplayId」时返回非空；否则 null（=不干预）。
+     * Requirement B: the recording mirror target display for this uid.
+     * Non-null only when "it is an app uid and recordDisplayId is configured"; otherwise null (= no intervention).
      */
     fun recordDisplayIdFor(uid: Int): Int? {
         if (!isAppUid(uid)) return null
@@ -96,14 +96,14 @@ object DisplayPolicyRegistry {
     }
 
     /**
-     * 需求 C：该包名（无障碍服务所在包）的无障碍操作目标屏。
+     * Requirement C: the accessibility operation target display for this package (the package hosting the accessibility service).
      *
-     * 无障碍连接对象上没有 uid，只有服务的 `ComponentName` 和 `mUserId`，
-     * 所以按「包名 + 服务所在用户」匹配（`DisplayPolicy.packageName` +
-     * 策略 uid 编码的 userId，即 `uid / 100000`）。多用户下同一包名会为每个
-     * 用户各安装一份（uid 不同），必须带 userId 消歧。
+     * The accessibility connection object has no uid, only the service's `ComponentName` and `mUserId`,
+     * so matching is by "package name + user owning the service" (`DisplayPolicy.packageName` +
+     * the userId encoded in the policy uid, i.e. `uid / 100000`). On multi-user setups the same package is installed
+     * once per user (with different uids), so userId is needed to disambiguate.
      *
-     * 只在配置了 `operatedDisplayId` 时返回非空；否则 null（=不干预）。
+     * Non-null only when `operatedDisplayId` is configured; otherwise null (= no intervention).
      */
     fun operatedDisplayIdForPackage(packageName: String?, userId: Int): Int? {
         if (packageName.isNullOrEmpty()) return null
@@ -114,9 +114,9 @@ object DisplayPolicyRegistry {
         }
     }
 
-    /** 该 uid 是否应当看到该 displayId。 */
+    /** Whether this uid should see this displayId. */
     fun isVisible(uid: Int, displayId: Int): Boolean {
-        // 默认屏永不过滤（见 DEFAULT_DISPLAY_ID 注释：摘掉会让 DecorContext NPE）。
+        // The default display is never filtered (see the DEFAULT_DISPLAY_ID comment: removing it makes DecorContext NPE).
         if (displayId == DEFAULT_DISPLAY_ID) return true
         if (!isAppUid(uid)) return true
         val policy = get(uid) ?: return true
@@ -127,7 +127,7 @@ object DisplayPolicyRegistry {
         }
     }
 
-    /** 按策略裁剪一个 displayId 列表；无策略/非 App uid 时原样返回（不分配新数组）。 */
+    /** Filters a displayId list by policy; with no policy / a non-app uid it is returned unchanged (no new array allocated). */
     fun filter(uid: Int, displayIds: IntArray): IntArray {
         if (!isAppUid(uid)) return displayIds
         if (get(uid) == null) return displayIds
@@ -135,8 +135,8 @@ object DisplayPolicyRegistry {
     }
 
     /**
-     * App uid 判定：多用户下 uid = userId*100000 + appId，appId∈[10000,19999]（含隔离进程 90000+）。
-     * 系统/root/shell 一律不是 App uid。
+     * App uid check: on multi-user setups uid = userId*100000 + appId, with appId in [10000,19999] (isolated processes 90000+ included).
+     * System/root/shell are never app uids.
      */
     fun isAppUid(uid: Int): Boolean {
         if (uid < Process.FIRST_APPLICATION_UID) return false

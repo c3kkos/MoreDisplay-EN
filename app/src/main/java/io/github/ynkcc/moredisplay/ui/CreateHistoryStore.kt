@@ -3,14 +3,14 @@ package io.github.ynkcc.moredisplay.ui
 import android.content.Context
 import io.github.ynkcc.moredisplay.App
 
-/** 一组用户最近使用过的虚拟屏尺寸（宽 × 高 @ dpi）。 */
+/** A virtual display size the user used recently (width x height @ dpi). */
 data class DisplaySizeHistory(val width: Int, val height: Int, val dpi: Int) {
     override fun toString(): String = "$width×$height@$dpi"
 }
 
 /**
- * 创建虚拟屏的历史记录：持久化用户最近最多 2 组 尺寸/dpi，
- * 不预设任何默认值，仅记录用户实际创建过的组合。
+ * History of virtual display creation: persists up to the user's 2 most recent size/dpi combinations,
+ * with no preset defaults; only combinations the user actually created are recorded.
  */
 object CreateHistoryStore {
 
@@ -20,10 +20,10 @@ object CreateHistoryStore {
     private const val KEY_HEIGHT = "h%d"
     private const val KEY_DPI = "dpi%d"
 
-    /** 最多保留的历史条数。 */
+    /** Maximum number of history entries kept. */
     const val MAX_ENTRIES = 2
 
-    /** 读取全部历史，最新在前。 */
+    /** Reads all history, newest first. */
     fun load(): List<DisplaySizeHistory> {
         val prefs = prefs() ?: return emptyList()
         val count = (prefs.getInt(KEY_COUNT, 0)).coerceIn(0, MAX_ENTRIES)
@@ -37,7 +37,7 @@ object CreateHistoryStore {
         }
     }
 
-    /** 记录一次创建；重复项上移到最前，超出 [MAX_ENTRIES] 的淘汰。 */
+    /** Records one creation; a duplicate moves to the front, entries beyond [MAX_ENTRIES] are evicted. */
     fun record(width: Int, height: Int, dpi: Int) {
         val prefs = prefs() ?: return
         val existing = load().toMutableList()

@@ -3,14 +3,14 @@ package io.github.ynkcc.moredisplay.daemon
 import android.util.Log
 
 /**
- * 在 daemon 进程内直接问平台要「当前真实存在的 displayId 列表」。
+ * Asks the platform directly, inside the daemon process, for "the list of displayIds that currently really exist".
  *
- * 用 `DisplayManagerGlobal.getInstance()`（静态、每次重试取服务），**不要**用 `DisplayManager`：
- * 引擎在 AMS 构造期创建时 DMS 还没注册，`DisplayManager` 构造期捕获的 `mGlobal` 会永久为 null。
+ * Uses `DisplayManagerGlobal.getInstance()` (static, retries fetching the service each time), **not** `DisplayManager`:
+ * the engine is created during AMS construction, before DMS is registered, so the `mGlobal` captured when `DisplayManager` is constructed stays null forever.
  *
- * 这里以 daemon 自身身份（LSPosed = uid 1000，Shizuku = uid 2000）调用，
- * 属于系统/特权身份，拿到的是**未经过我们 per-uid 过滤**的完整列表，
- * 正好用来计算「某个目标 uid 实际可见什么」。
+ * This is called with the daemon's own identity (Xposed = uid 1000, Shizuku = uid 2000),
+ * a system/privileged identity, so it gets the full list **without our per-uid filtering**,
+ * which is exactly what is needed to compute "what a given target uid actually sees".
  */
 object DisplayQuery {
 
@@ -32,7 +32,7 @@ object DisplayQuery {
         emptyList()
     }
 
-    /** 某个 uid 实际可见的 displayId（已套用策略）。 */
+    /** The displayIds a given uid actually sees (with policies applied). */
     fun visibleDisplayIds(uid: Int): List<Int> =
         rawDisplayIds().filter { DisplayPolicyRegistry.isVisible(uid, it) }
 }

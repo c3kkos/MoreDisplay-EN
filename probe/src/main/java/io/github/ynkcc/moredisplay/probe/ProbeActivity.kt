@@ -23,19 +23,19 @@ import android.widget.ScrollView
 import android.widget.TextView
 
 /**
- * 屏幕可见性 / 录屏替换的「探测程序」—— 一个**普通 App**（不被模块注入、不在 LSPosed 作用域内）。
+ * "Probe" for display visibility / recording redirection -- a **normal app** (not injected by the module, not in the Xposed scope).
  *
- * 它只用公开 API 复现目标 App 能做的动作：
- * 1. **可见性**：`DisplayManager.getDisplays()`、`getDisplays(PRESENTATION)`、`getDisplay(0..N)` 猜 id；
- * 2. **事件**：注册 `DisplayListener`，看是否泄露被隐藏的屏；
- * 3. **录屏（需求 B）**：
- *    - 真实路径：`MediaProjectionManager` → 授权 → `MediaProjection.createVirtualDisplay(AUTO_MIRROR)`
- *      → 用 `ImageReader` 收帧；
- *    - 合成路径：直接 `DisplayManager.createVirtualDisplay(AUTO_MIRROR)`（不需要授权弹窗）。
+ * It uses only public APIs to reproduce what a target app can do:
+ * 1. **Visibility**: `DisplayManager.getDisplays()`, `getDisplays(PRESENTATION)`, `getDisplay(0..N)` to guess ids;
+ * 2. **Events**: registers a `DisplayListener` to see whether hidden displays leak;
+ * 3. **Recording (requirement B)**:
+ *    - real path: `MediaProjectionManager` -> consent -> `MediaProjection.createVirtualDisplay(AUTO_MIRROR)`
+ *      -> receives frames with `ImageReader`;
+ *    - synthetic path: `DisplayManager.createVirtualDisplay(AUTO_MIRROR)` directly (no consent dialog needed).
  *
- * 结果同时打到 logcat（tag `MoreDisplay_Probe`）和界面上。
+ * Results go both to logcat (tag `MoreDisplay_Probe`) and to the screen.
  *
- * 用法（adb）：
+ * Usage (adb):
  *     adb shell am start -n io.github.ynkcc.moredisplay.probe/.ProbeActivity
  *     adb logcat -s MoreDisplay_Probe
  *     adb shell dumpsys display | grep -B2 -A2 mDisplayIdToMirror
@@ -45,7 +45,7 @@ class ProbeActivity : Activity() {
     companion object {
         const val TAG = "MoreDisplay_Probe"
 
-        /** 供 adb 无交互驱动：`--es task probe|mirror|mp|release`。 */
+        /** For non-interactive driving over adb: `--es task probe|mirror|mp|release`. */
         const val EXTRA_TASK = "task"
         const val TASK_PROBE = "probe"
         const val TASK_MIRROR = "mirror"
@@ -70,7 +70,7 @@ class ProbeActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private val lines = mutableListOf<String>()
 
-    // --- 录屏探测状态 ---
+    // --- Recording probe state ---
     private var projection: MediaProjection? = null
     private var captureDisplay: VirtualDisplay? = null
     private var captureReader: ImageReader? = null
@@ -99,20 +99,20 @@ class ProbeActivity : Activity() {
             setPadding(24, 24, 24, 24)
         }
         val row1 = row(
-            button("清空") { lines.clear(); render() },
-            button("重新探测") { probe() }
+            button("Clear") { lines.clear(); render() },
+            button("Probe again") { probe() }
         )
         val row2 = row(
-            button("录屏探测") { startMediaProjectionProbe() },
+            button("Recording probe") { startMediaProjectionProbe() },
             button("AUTO_MIRROR") { startSyntheticMirrorProbe() }
         )
         val row3 = row(
-            button("释放录屏") { releaseCapture("manual") },
+            button("Release capture") { releaseCapture("manual") },
             button("dump mFlags") { dumpFlags() },
-            button("清屏日志") { runCatching { Log.i(TAG, "--- marker ---") }; lines.clear(); render() }
+            button("Clear log") { runCatching { Log.i(TAG, "--- marker ---") }; lines.clear(); render() }
         )
         val row4 = row(
-            button("设备信息") { dumpDevices() }
+            button("Device info") { dumpDevices() }
         )
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -157,14 +157,14 @@ class ProbeActivity : Activity() {
         super.onDestroy()
     }
 
-    /** 需求 C 验收：记录实际到达本窗口的触摸（含 displayId / 坐标）。 */
+    /** Requirement C acceptance: records touches that actually reach this window (with displayId / coordinates). */
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         Log.i(TAG, "TOUCH display=${display?.displayId} action=${event.actionMasked} " +
             "x=${event.x} y=${event.y}")
         return super.dispatchTouchEvent(event)
     }
 
-    // ------------------------------------------------------------------ 可见性探测
+    // ------------------------------------------------------------------ Visibility probe
 
     private fun probe() {
         val uid = Process.myUid()
@@ -189,21 +189,21 @@ class ProbeActivity : Activity() {
         record("========== PROBE END ==========")
     }
 
-    // ------------------------------------------------------------------ 需求 B：录屏探测
+    // ------------------------------------------------------------------ Requirement B: recording probe
 
-    /** 真实路径：MediaProjection 授权后创建 AUTO_MIRROR 虚拟屏（会被模块改写 mirror 源）。 */
+    /** Real path: after MediaProjection consent, create an AUTO_MIRROR virtual display (its mirror source will be rewritten by the module). */
     private fun startMediaProjectionProbe() {
         releaseProjection()
         releaseDisplay()
         CaptureForegroundService.start(this)
-        record("PROJECTION 请求授权（需在系统弹窗点「开始录制」）")
+        record("PROJECTION requesting consent (tap \"Start recording\" in the system dialog)")
         runCatching { startActivityForResult(projectionManager.createScreenCaptureIntent(), REQ_PROJECTION) }
-            .onFailure { record("PROJECTION 请求失败: $it") }
+            .onFailure { record("PROJECTION request failed: $it") }
     }
 
-    /** 合成路径：不走 MediaProjection，直接 AUTO_MIRROR（无需授权弹窗，便于自动化）。 */
+    /** Synthetic path: skip MediaProjection, AUTO_MIRROR directly (no consent dialog, easier to automate). */
     private fun startSyntheticMirrorProbe() {
-        record("--- 合成 AUTO_MIRROR 探测（无 MediaProjection）---")
+        record("--- Synthetic AUTO_MIRROR probe (no MediaProjection) ---")
         prepareCapture("SYNTH", DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR) { surface ->
             displayManager.createVirtualDisplay(
                 "ProbeSynthetic",
@@ -215,11 +215,11 @@ class ProbeActivity : Activity() {
     }
 
     /**
-     * 非录屏对照：`OWN_CONTENT_ONLY`（只显示自己内容，不镜像任何屏）。
-     * 这类虚拟屏**不应该**被模块改写 mirror 源。
+     * Non-recording control: `OWN_CONTENT_ONLY` (shows only its own content, mirrors no display).
+     * The module **must not** rewrite the mirror source of this kind of virtual display.
      */
     private fun startOwnContentProbe() {
-        record("--- OWN_CONTENT_ONLY 探测（非镜像屏，应被模块跳过）---")
+        record("--- OWN_CONTENT_ONLY probe (non-mirroring display, should be skipped by the module) ---")
         val flags = DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY
         prepareCapture("OWN", flags) { surface ->
             displayManager.createVirtualDisplay(
@@ -235,19 +235,19 @@ class ProbeActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == REQ_PROJECTION) {
             if (resultCode != RESULT_OK || data == null) {
-                record("PROJECTION 被拒绝 (resultCode=$resultCode)")
+                record("PROJECTION denied (resultCode=$resultCode)")
                 CaptureForegroundService.stop(this)
                 return
             }
             val mp = runCatching { projectionManager.getMediaProjection(resultCode, data) }
-                .onFailure { record("PROJECTION getMediaProjection 失败: $it") }
+                .onFailure { record("PROJECTION getMediaProjection failed: $it") }
                 .getOrNull() ?: return
             releaseDisplay()
             projection = mp
-            // MediaProjection 要求「先注册 callback 再开始采集」，否则 createVirtualDisplay 会抛
+            // MediaProjection requires "register the callback before starting capture", otherwise createVirtualDisplay throws
             // IllegalStateException: Must register a callback before starting capture.
             mp.registerCallback(projectionCallback, handler)
-            record("PROJECTION 已授权 -> 创建 AUTO_MIRROR 虚拟屏")
+            record("PROJECTION granted -> creating AUTO_MIRROR virtual display")
             prepareCapture("MP", DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR) { surface ->
                 mp.createVirtualDisplay(
                     "ProbeRecord",
@@ -265,13 +265,13 @@ class ProbeActivity : Activity() {
     }
 
     /**
-     * 统一入口：给虚拟屏挂一个 ImageReader 收帧，并在一段时间后汇总「是否收到帧 / 画面是否纯黑」。
+     * Common entry: attach an ImageReader to the virtual display to receive frames, and after a while summarize "were frames received / is the image pure black".
      *
-     * 注意这是**辅助证据**，结论要结合 `dumpsys display` 里的 `mDisplayIdToMirror=`：
-     * 镜像到无内容的托管空屏 → 收不到有效帧或纯黑；镜像到 display 0 → 有真实画面。
+     * Note this is **supporting evidence**; conclusions should be combined with `mDisplayIdToMirror=` in `dumpsys display`:
+     * mirroring an empty managed display with no content -> no valid frames or pure black; mirroring display 0 -> real image.
      */
     private fun prepareCapture(label: String, flags: Int, create: (Surface) -> VirtualDisplay?) {
-        // 只释放上一块虚拟屏/reader，**不要**动刚落地的 MediaProjection（否则 callback 会被反注册）。
+        // Only release the previous virtual display/reader; **don't** touch the MediaProjection that just arrived (otherwise its callback gets unregistered).
         releaseDisplay()
         captureLabel = label
         frameCount = 0
@@ -282,10 +282,10 @@ class ProbeActivity : Activity() {
         reader.setOnImageAvailableListener({ r -> onFrame(r) }, handler)
 
         val virtualDisplay = runCatching { create(reader.surface) }
-            .onFailure { record("$label 创建虚拟屏失败: $it") }
+            .onFailure { record("$label failed to create virtual display: $it") }
             .getOrNull()
         if (virtualDisplay == null) {
-            record("$label 创建虚拟屏失败（返回 null）")
+            record("$label failed to create virtual display (returned null)")
             return
         }
         captureDisplay = virtualDisplay
@@ -295,7 +295,7 @@ class ProbeActivity : Activity() {
             "$label virtualDisplay=${displayId} ${CAPTURE_W}x${CAPTURE_H} " +
                 "flags=0x${Integer.toHexString(flags)}"
         )
-        record("$label uid=${Process.myUid()}  —— 现在可以执行 dumpsys display 看 mDisplayIdToMirror=")
+        record("$label uid=${Process.myUid()}  -- now run dumpsys display and check mDisplayIdToMirror=")
 
         handler.postDelayed({ summarize(label) }, SAMPLE_MS)
     }
@@ -341,9 +341,9 @@ class ProbeActivity : Activity() {
     private fun summarize(label: String) {
         val mean = if (frameCount > 0) luminanceSum / frameCount else -1.0
         val verdict = when {
-            frameCount == 0 -> "无帧（可能镜像到无合成内容的托管空屏）"
-            mean < 20.0 -> "画面很暗 -> 更像镜像到空的托管屏"
-            else -> "画面明亮 -> 更像镜像到 display 0"
+            frameCount == 0 -> "no frames (possibly mirroring an empty managed display with nothing composited)"
+            mean < 20.0 -> "image is very dark -> more likely mirroring an empty managed display"
+            else -> "image is bright -> more likely mirroring display 0"
         }
         record("$label SAMPLING frames=$frameCount meanByte=%.1f verdict=$verdict".format(mean))
     }
@@ -355,7 +355,7 @@ class ProbeActivity : Activity() {
         CaptureForegroundService.stop(this)
     }
 
-    /** 只释放虚拟屏 + ImageReader（保留 MediaProjection）。 */
+    /** Releases only the virtual display + ImageReader (keeps the MediaProjection). */
     private fun releaseDisplay() {
         if (captureDisplay != null || captureReader != null) {
             captureDisplay?.let { runCatching { it.release() } }
@@ -380,16 +380,16 @@ class ProbeActivity : Activity() {
     // ------------------------------------------------------------------ mFlags dump
 
     /**
-     * 读取 `dumpsys display` 中每个虚拟屏的 `mFlags`。
-     * mFlags 是创建时请求的 `VIRTUAL_DISPLAY_FLAG_*`（经 DMS 归一化），与 Display.getFlags() 是两套位表。
+     * Reads the `mFlags` of every virtual display from `dumpsys display`.
+     * mFlags are the `VIRTUAL_DISPLAY_FLAG_*` requested at creation (normalized by DMS), a different bit table from Display.getFlags().
      */
     private fun dumpFlags() {
         val text = runCatching {
             Runtime.getRuntime().exec(arrayOf("dumpsys", "display"))
                 .inputStream.bufferedReader().use { it.readText() }
-        }.getOrElse { record("DUMP 执行失败: $it"); return }
+        }.getOrElse { record("DUMP failed: $it"); return }
         if (text.isBlank() || text.contains("Permission Denial")) {
-            record("DUMP 权限不足，请先执行: adb shell pm grant io.github.ynkcc.moredisplay.probe android.permission.DUMP")
+            record("DUMP permission missing, run first: adb shell pm grant io.github.ynkcc.moredisplay.probe android.permission.DUMP")
             return
         }
         record("========== MFLAGS DUMP ==========")
@@ -409,11 +409,11 @@ class ProbeActivity : Activity() {
                 count++
             }
         }
-        if (count == 0) record("未找到任何 mFlags 条目")
+        if (count == 0) record("No mFlags entries found")
         record("========== DUMP END ==========")
     }
 
-    /** DisplayManager.VIRTUAL_DISPLAY_FLAG_* 位名（bit0..17，与 aosp17 文档一致）。 */
+    /** Bit names of DisplayManager.VIRTUAL_DISPLAY_FLAG_* (bit0..17, matching the AOSP 17 docs). */
     private val virtualFlagNames = listOf(
         "PUBLIC", "PRESENTATION", "SECURE", "OWN_CONTENT_ONLY", "AUTO_MIRROR",
         "CAN_SHOW_WITH_INSECURE_KEYGUARD", "SUPPORTS_TOUCH", "ROTATES_WITH_CONTENT",
@@ -427,28 +427,28 @@ class ProbeActivity : Activity() {
             .joinToString("|") { virtualFlagNames.getOrNull(it) ?: "bit$it" }
             .ifEmpty { "0" }
 
-    // ------------------------------------------------------------------ DisplayDeviceInfo 解析
+    // ------------------------------------------------------------------ DisplayDeviceInfo parsing
 
     /**
-     * 解析 `dumpsys display` 里每个显示设备的 `DisplayDeviceInfo` 行。
+     * Parses the `DisplayDeviceInfo` line of every display device in `dumpsys display`.
      *
-     * 诊断要点：虚拟屏**没有输出 Surface 时 `state` 是 `OFF`** —— SurfaceFlinger 不为它做合成，
-     * 屏上的 Activity 拿不到 vsync、永远不绘制，也就录不到任何内容。所以这里把
-     * state / committedState / owner / 镜像源一并列出，用来确认「屏是否真的亮着」。
+     * Key diagnostic: a virtual display **without an output Surface has `state` OFF** -- SurfaceFlinger doesn't composite it,
+     * activities on it get no vsync and never draw, so nothing can be recorded. That's why
+     * state / committedState / owner / mirror source are listed together here, to confirm "is the display really on".
      */
     private fun dumpDevices() {
         val text = runCatching {
             Runtime.getRuntime().exec(arrayOf("dumpsys", "display"))
                 .inputStream.bufferedReader().use { it.readText() }
-        }.getOrElse { record("DUMP 执行失败: $it"); return }
+        }.getOrElse { record("DUMP failed: $it"); return }
         if (text.isBlank() || text.contains("Permission Denial")) {
-            record("DUMP 权限不足，请先执行: adb shell pm grant io.github.ynkcc.moredisplay.probe android.permission.DUMP")
+            record("DUMP permission missing, run first: adb shell pm grant io.github.ynkcc.moredisplay.probe android.permission.DUMP")
             return
         }
 
         val lines = text.lineSequence().map { it.trim() }.toList()
-        // displayId 只在 logical 层的 DisplayInfo{...} 里给出，device 层的 DisplayDeviceInfo{...}
-        // 没有它，因此先用 uniqueId 建立映射再回填。
+        // displayId is only given in the logical-layer DisplayInfo{...}; the device-layer DisplayDeviceInfo{...}
+        // doesn't have it, so a uniqueId mapping is built first and then backfilled.
         val idByUnique = HashMap<String, String>()
         for (l in lines) {
             if (!l.contains("DisplayInfo{")) continue
@@ -459,12 +459,12 @@ class ProbeActivity : Activity() {
         val at = lines.indices.filter { RE_DEVICE.containsMatchIn(lines[it]) }
         record("========== DISPLAY DEVICES ==========")
         if (at.isEmpty()) {
-            record("未解析到任何 DisplayDeviceInfo 条目")
+            record("No DisplayDeviceInfo entries parsed")
             record("========== DEVICES END ==========")
             return
         }
         at.forEachIndexed { k, i ->
-            // mDisplayIdToMirror 落在设备行之后、下一个设备行之前，按区间回填。
+            // mDisplayIdToMirror comes after a device line and before the next one, so it is backfilled by range.
             val until = at.getOrNull(k + 1) ?: lines.size
             val mirror = (i until until).asSequence()
                 .mapNotNull { RE_MIRROR.find(lines[it])?.groupValues?.get(1) }
@@ -498,7 +498,7 @@ class ProbeActivity : Activity() {
 
     private val RE_DEVICE =
         Regex("""DisplayDeviceInfo\{"([^"]*)":\s*uniqueId="([^"]*)",\s*(\d+)\s*x\s*(\d+)""")
-    /** logical 层：`DisplayInfo{"name", displayId 24, ...}`。 */
+    /** Logical layer: `DisplayInfo{"name", displayId 24, ...}`. */
     private val RE_LOGICAL_ID = Regex("""\bdisplayId\s+(\d+)\b""")
     private val RE_UNIQUE_SP = Regex("""\buniqueId\s+"([^"]+)"""")
     private val RE_MIRROR = Regex("""\bmDisplayIdToMirror=(-?\d+)\b""")
@@ -510,7 +510,7 @@ class ProbeActivity : Activity() {
     private val RE_OWNER = Regex("""\bowner\s+(\S+)\s*\(uid\s*(\d+)\)""")
     private val RE_FLAG = Regex("""\bFLAG_[A-Z_]+""")
 
-    // ------------------------------------------------------------------ 工具
+    // ------------------------------------------------------------------ Utilities
 
     private fun row(vararg views: Button): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL

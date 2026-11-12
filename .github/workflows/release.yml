@@ -23,7 +23,7 @@ jobs:
           distribution: temurin
           java-version: '25'
 
-      # 同 ci.yml：用 runner 自带 SDK，缺失组件交给 AGP 下载。
+      # Same as ci.yml: use the runner's bundled SDK and let AGP download missing components.
       - name: Accept SDK licenses
         run: yes | sdkmanager --licenses > /dev/null 2>&1 || true
 
@@ -73,10 +73,10 @@ jobs:
           name: release-notes
           path: out/release-notes.md
 
-  # 把元数据与 APK 推到 LSPosed 官方收录仓库 Xposed-Modules-Repo/<package>。
-  # 未配置 LSPOSED_REPO_TOKEN（具备该仓库写权限的 PAT）时整段跳过，
-  # 此时改用 scripts/publish-lsposed.sh 本地发布。
-  # 注意：secrets 上下文不能用在 job 级 if，所以判断放在步骤内。
+  # Push metadata and the APK to the official module repository Xposed-Modules-Repo/<package> (used by the LSPosed / Vector managers).
+  # Skipped entirely when LSPOSED_REPO_TOKEN (a PAT with write access to that repository) is not configured;
+  # in that case publish locally with scripts/publish-lsposed.sh instead.
+  # Note: the secrets context cannot be used in a job-level if, so the check lives inside the step.
   publish-lsposed:
     needs: release
     runs-on: ubuntu-latest
@@ -99,7 +99,7 @@ jobs:
           set -euo pipefail
           TAG="${GITHUB_REF_NAME:-manual-${GITHUB_RUN_ID}}"
           gh release download "$TAG" --dir out --pattern '*.apk'
-          # 收录仓库只放模块本体；probe 是验收用的探测程序，不随模块分发。
+          # The module repository only carries the module itself; probe is an acceptance-test tool and is not distributed with it.
           rm -f out/MoreDisplayProbe-*.apk
 
       - name: Publish to Xposed-Modules-Repo

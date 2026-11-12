@@ -15,8 +15,8 @@ class DaemonUserService @Keep constructor(context: Context) : IDaemonRpc.Stub() 
     }
 
     init {
-        // 必须先于 engine 属性初始化执行（属性按声明序初始化），
-        // 否则引擎会以 root 身份探测权限/选择候选包名。
+        // Must run before the engine property is initialized (properties initialize in declaration order),
+        // otherwise the engine would probe permissions/choose candidate package names as root.
         demoteToShellIfNeeded()
         Log.i(TAG, "daemon started, uid=${android.os.Process.myUid()} pid=${android.os.Process.myPid()}")
     }
@@ -24,15 +24,15 @@ class DaemonUserService @Keep constructor(context: Context) : IDaemonRpc.Stub() 
     private val engine = ShellDisplayEngine(context)
 
     /**
-     * root (uid 0) 启动时降权到 shell (2000)。DMS `validatePackageName`
-     * 要求包名属于调用 uid，而 uid 0 通常不属于任何包——但各 ROM 对 root
-     * 的处理不一致（实测部分 ROM 放行、部分直接拒绝），无法预先判定。
-     * uid 2000 + com.android.shell 则在所有 ROM 上均合法，故统一降权。
-     * 必须在构造期（binder 线程启动前）执行，保证后续线程继承降权后的身份。
+     * When started as root (uid 0), drop privileges to shell (2000). DMS `validatePackageName`
+     * requires the package name to belong to the calling uid, and uid 0 usually belongs to no package -- but ROMs handle root
+     * inconsistently (some allow it, some reject it outright, as observed), so it can't be decided in advance.
+     * uid 2000 + com.android.shell is valid on every ROM, so privileges are always dropped.
+     * Must run during construction (before binder threads start) so later threads inherit the reduced identity.
      */
-    // Os.setuid/setgid 被弃用的原因是"普通应用无权限调用"；
-    // 本守护进程以 root 运行并主动降权到 shell(2000)，是有意使用的合法场景，
-    // SDK 亦无对应的非弃用等价 API，故显式豁免。
+    // Os.setuid/setgid are deprecated because "normal apps have no permission to call them";
+    // this daemon runs as root and deliberately drops to shell(2000), which is an intended, legitimate use,
+    // and the SDK has no non-deprecated equivalent API, so it is explicitly exempted.
     @Suppress("DEPRECATION")
     private fun demoteToShellIfNeeded() {
         if (android.os.Process.myUid() != 0) return

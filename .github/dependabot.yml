@@ -1,8 +1,8 @@
-# Dependabot 配置：Gradle 依赖更新 + GitHub Actions 工作流更新
-# 文档: https://docs.github.com/zh/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+# Dependabot config: Gradle dependency updates + GitHub Actions workflow updates
+# Docs: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 version: 2
 updates:
-  # Gradle 依赖（覆盖所有模块的 build.gradle.kts / libs.versions.toml）
+  # Gradle dependencies (covers build.gradle.kts / libs.versions.toml of every module)
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
@@ -11,18 +11,18 @@ updates:
       time: "09:00"
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 10
-    # 按模块分组，避免 PR 数量爆炸
+    # Group by module to avoid an explosion of PRs
     groups:
       gradle-minor-and-patch:
         update-types:
           - "minor"
           - "patch"
     ignore:
-      # Android SDK / AGP 大版本通常需要手动迁移，避免自动升主版本破坏构建
+      # Major Android SDK / AGP versions usually need manual migration; don't auto-bump major versions and break the build
       - dependency-name: "com.android.tools.build:gradle"
         update-types: ["version-update:semver-major"]
 
-  # GitHub Actions 工作流依赖（ci.yml / release.yml 里用到的 action 版本）
+  # GitHub Actions workflow dependencies (action versions used in ci.yml / release.yml)
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

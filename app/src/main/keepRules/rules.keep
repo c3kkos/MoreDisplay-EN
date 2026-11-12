@@ -4,9 +4,9 @@
 # For more information, see the following:
 #   https://d.android.com/r/tools/r8/keep-rules
 
-# Shizuku UserService 在独立 shell 进程中以应用 APK 类加载器实例化，
-# 保留入口类构造器与 Stub，避免裁剪/混淆破坏跨进程反射。
-# LibXposed API 102 模块入口：保留 XposedModule 子类与无参构造器
+# The Shizuku UserService is instantiated in a separate shell process with the app APK's class loader;
+# keep the entry class constructor and Stub so shrinking/obfuscation doesn't break cross-process reflection.
+# LibXposed API 102 module entry: keep the XposedModule subclass and its no-arg constructor
 -keep,allowoptimization,allowobfuscation public class * extends io.github.libxposed.api.XposedModule {
     public <init>();
 }
@@ -22,12 +22,12 @@
 -keep class io.github.ynkcc.moredisplay.daemon.** { *; }
 -keep class io.github.ynkcc.moredisplay.dispatch.** { *; }
 
-# Xposed 模块入口由 LSPosed 按 META-INF/xposed/java_init.list 里的类名反射加载，
-# dex 内不存在任何对它的引用，开启 R8 后会被整类误裁掉，必须显式保留。
-# （这些类内部反射的是 framework 隐藏 API，framework 不在本 dex 中，不受影响。）
+# The Xposed module entry is loaded reflectively by the framework (Vector / LSPosed) from the class names in META-INF/xposed/java_init.list.
+# Nothing in the dex references it, so with R8 enabled the whole class would be stripped by mistake; it must be kept explicitly.
+# (These classes reflect on hidden framework APIs; the framework is not in this dex, so that is unaffected.)
 -keep class io.github.ynkcc.moredisplay.xposed.** { *; }
 -keep class io.github.ynkcc.moredisplay.CommandActivity { *; }
 
-# Shizuku 的 UserService 通过 Binder 跨进程调用，保留 aidl 生成的 Stub/Proxy。
+# Shizuku's UserService is called across processes over Binder; keep the aidl-generated Stub/Proxy.
 -keep class **$Stub { *; }
 -keep class **$Stub$Proxy { *; }

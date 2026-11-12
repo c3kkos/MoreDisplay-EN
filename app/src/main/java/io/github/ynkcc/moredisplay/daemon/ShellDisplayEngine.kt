@@ -30,11 +30,11 @@ class ShellDisplayEngine(
     }.getOrDefault(-1)
 
     /**
-     * DMS 的 `validatePackageName` 要求包名必须属于调用 uid。daemon 与 app 不同
-     * uid 时（shell=2000 / root=0）不能直接用 app 包名：
-     * - uid 2000：getPackagesForUid → [com.android.shell]，天然合法；
-     * - uid 0：各 ROM 行为不一（实测有放行也有拒绝），依次尝试候选并在
-     *   "packageName must match" 时降级重试。
+     * DMS's `validatePackageName` requires the package name to belong to the calling uid. When the daemon and the app
+     * run under different uids (shell=2000 / root=0), the app's package name cannot be used directly:
+     * - uid 2000: getPackagesForUid -> [com.android.shell], valid by nature;
+     * - uid 0: behavior varies by ROM (both allow and deny have been observed); candidates are tried in turn, falling back
+     *   and retrying on "packageName must match".
      */
     private val candidatePackageNames: List<String> = buildList {
         if (myUid == appUid) {
@@ -48,7 +48,7 @@ class ShellDisplayEngine(
         if (!contains(context.packageName)) add(context.packageName)
     }
 
-    /** 首次 create 成功后定格的 context，供 holdDisplay 等复用。 */
+    /** Context fixed after the first successful create, reused by holdDisplay etc. */
     @Volatile
     private var resolvedContext: android.content.Context? = null
 
@@ -65,9 +65,9 @@ class ShellDisplayEngine(
 
                 override fun getSystemService(name: String): Any? {
                     if (name == android.content.Context.DISPLAY_SERVICE) {
-                        // ContextWrapper.getSystemService 会委托回 base context，
-                        // 必须反射 DisplayManager(Context) 构造器，让 mPackageName
-                        // 取到本 wrapper 重写后的 opPackageName。
+                        // ContextWrapper.getSystemService delegates back to the base context,
+                        // so the DisplayManager(Context) constructor must be called reflectively to make mPackageName
+                        // pick up this wrapper's overridden opPackageName.
                         return runCatching {
                             DisplayManager::class.java.declaredConstructors
                                 .first { it.parameterTypes.size == 1 && it.parameterTypes[0] == android.content.Context::class.java }
@@ -110,17 +110,17 @@ class ShellDisplayEngine(
     private val managed = linkedMapOf<Int, DisplayInfo>()
     private val virtualDisplays = linkedMapOf<Int, android.hardware.display.VirtualDisplay>()
 
-    /** displayId → 该屏的输出接收端（丢弃型 sink），见 [newSink]。 */
+    /** displayId -> that display's output receiver (discarding sink), see [newSink]. */
     private val sinks = linkedMapOf<Int, ImageReader>()
 
     private val sinkThread = HandlerThread("MoreDisplay-shell-sink").apply { start() }
     private val sinkHandler = Handler(sinkThread.looper)
 
     /**
-     * 与 [SystemDisplayEngine] 同理：`VirtualDisplayDevice` 的 state 取决于有没有输出 Surface，
-     * surface 为 null 时 `DisplayDeviceInfo.state == STATE_OFF`，SurfaceFlinger 不做合成，
-     * 屏上的 Activity 拿不到 vsync、永远不绘制，也就录不到任何内容。
-     * 这里挂一个「只接收、立刻丢弃」的 ImageReader，让屏变成 state ON。
+     * Same as [SystemDisplayEngine]: a `VirtualDisplayDevice`'s state depends on whether it has an output Surface;
+     * with a null surface `DisplayDeviceInfo.state == STATE_OFF`, SurfaceFlinger doesn't composite it,
+     * activities on the display get no vsync and never draw, so nothing can be recorded.
+     * An ImageReader that "only receives and immediately discards" is attached here so the display becomes state ON.
      */
     private fun newSink(width: Int, height: Int): Sink {
         val reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
@@ -132,9 +132,9 @@ class ShellDisplayEngine(
 
     private class Sink(val reader: ImageReader, val surface: Surface)
 
-    // 特权 flag（TRUSTED/OWN_DISPLAY_GROUP/ALWAYS_UNLOCKED/SHOULD_SHOW_SYSTEM_DECORATIONS）
-    // 由 DMS 按调用方权限逐项校验。uid 0 全部放行；uid 2000 取决于 ROM 是否给
-    // com.android.shell 授予 ADD_TRUSTED_DISPLAY 等权限，因此启动时实测一次。
+    // Privileged flags (TRUSTED/OWN_DISPLAY_GROUP/ALWAYS_UNLOCKED/SHOULD_SHOW_SYSTEM_DECORATIONS)
+    // are checked one by one by DMS against the caller's permissions. uid 0 passes all of them; for uid 2000 it depends on whether the ROM grants
+    // com.android.shell permissions like ADD_TRUSTED_DISPLAY, so it is tested once at startup.
     private val hasPrivilege: (String) -> Boolean = { permission ->
         myUid == 0 || runCatching {
             context.checkPermission(
@@ -150,7 +150,7 @@ class ShellDisplayEngine(
         var flags = CapabilityMatrix.normalizeFlagCombination(
             CapabilityMatrix.flagsForSdk(spec.flags)
         )
-        // 与 DMS 行为对齐：非 TRUSTED 的屏 sys-decor 会被静默剔除，直接上报真实值。
+        // Match DMS behavior: sys-decor is silently dropped on non-TRUSTED displays, so report the real value directly.
         if (flags and VirtualDisplayFlags.TRUSTED == 0) {
             flags = flags and VirtualDisplayFlags.SHOULD_SHOW_SYSTEM_DECORATIONS.inv()
         }
@@ -229,7 +229,7 @@ class ShellDisplayEngine(
         }
     }
 
-    /** 按异常信息剔除被拒绝的特权 flag；消息无法判读时一次性剔除全部特权 flag。 */
+    /** Removes the rejected privileged flags based on the exception message; if the message can't be interpreted, removes all privileged flags at once. */
     private fun downgradePrivilegedFlags(flags: Int, e: SecurityException): Int {
         val msg = e.message ?: return flags and TRUSTED_GOVERNED_FLAGS.inv()
         var next = flags
@@ -240,16 +240,16 @@ class ShellDisplayEngine(
                 next = next and VirtualDisplayFlags.ALWAYS_UNLOCKED.inv()
             msg.contains("INTERNAL_SYSTEM_WINDOW") ->
                 next = next and VirtualDisplayFlags.SHOULD_SHOW_SYSTEM_DECORATIONS.inv()
-            // 无投屏权限时：镜像（AUTO_MIRROR，含 PUBLIC 隐含的）不可用，
-            // 降级为 OWN_CONTENT_ONLY 自绘屏；SECURE 屏需要 CAPTURE_SECURE_VIDEO_OUTPUT。
-            // 注意 AUTO_MIRROR 的报错消息同时列出两个权限名，须用唯一短语区分。
+            // Without screen-capture permission: mirroring (AUTO_MIRROR, including the one implied by PUBLIC) is unavailable,
+            // so fall back to an OWN_CONTENT_ONLY self-drawn display; SECURE displays need CAPTURE_SECURE_VIDEO_OUTPUT.
+            // Note: the AUTO_MIRROR error message lists both permission names, so a unique phrase must be used to tell them apart.
             msg.contains("screen sharing virtual display") ->
                 next = (next and VirtualDisplayFlags.AUTO_MIRROR.inv()) or VirtualDisplayFlags.OWN_CONTENT_ONLY
             msg.contains("secure virtual display") ->
                 next = next and VirtualDisplayFlags.SECURE.inv()
             else -> next = flags and TRUSTED_GOVERNED_FLAGS.inv()
         }
-        // TRUSTED 被剔除后 sys-decor 必然失效，一并剔除。
+        // Once TRUSTED is removed, sys-decor can't work either, so remove it too.
         if (next and VirtualDisplayFlags.TRUSTED == 0) {
             next = next and VirtualDisplayFlags.SHOULD_SHOW_SYSTEM_DECORATIONS.inv()
         }
@@ -261,7 +261,7 @@ class ShellDisplayEngine(
         val ctx = resolvedContext ?: context
         val display = displayManagerOf(ctx).getDisplay(displayId) ?: return null
         val dpi = ctx.resources.displayMetrics.densityDpi
-        // display.width/height 已弃用；物理面板尺寸对虚拟显示 spec 语义也更准确
+        // display.width/height are deprecated; the physical panel size is also semantically more accurate for a virtual display spec
         return DisplayInfo(displayId, DisplaySpec(display.mode.physicalWidth, display.mode.physicalHeight, dpi)).also { managed[displayId] = it }
     }
 

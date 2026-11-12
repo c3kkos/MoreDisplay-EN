@@ -11,7 +11,7 @@ import io.github.ynkcc.moredisplay.core.DisplayPolicy
 import io.github.ynkcc.moredisplay.core.IDisplayRepository
 import io.github.ynkcc.moredisplay.core.Visibility
 
-/** 应用选择器条目：label / 包名 / uid 一次取齐，图标在 UI 层按需加载。 */
+/** App picker entry: label / package name / uid fetched together; the icon is loaded lazily in the UI layer. */
 data class AppEntry(
     val packageName: String,
     val label: String,
@@ -34,7 +34,7 @@ class PoliciesViewModel(
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message
 
-    /** 已安装应用列表；null = 尚未加载/加载中。 */
+    /** Installed app list; null = not loaded yet / loading. */
     private val _installedApps = MutableStateFlow<List<AppEntry>?>(null)
     val installedApps: StateFlow<List<AppEntry>?> = _installedApps
 
@@ -42,7 +42,7 @@ class PoliciesViewModel(
         reload()
     }
 
-    /** 首次调用时在 IO 线程读取已安装应用，结果缓存，重复调用为空操作。 */
+    /** On first call, reads installed apps on the IO thread and caches the result; repeated calls are no-ops. */
     fun loadInstalledApps() {
         if (_installedApps.value != null) return
         viewModelScope.launch(Dispatchers.IO) {
@@ -61,7 +61,7 @@ class PoliciesViewModel(
             _busy.value = true
             repo.listDisplayPolicies().fold(
                 onSuccess = { _policies.value = it },
-                onFailure = { _message.value = "加载策略失败: ${it.message}" }
+                onFailure = { _message.value = "Failed to load policies: ${it.message}" }
             )
             _busy.value = false
         }
@@ -92,10 +92,10 @@ class PoliciesViewModel(
                 )
             ).fold(
                 onSuccess = {
-                    _message.value = "策略已保存: ${it.describe()}"
+                    _message.value = "Policy saved: ${it.describe()}"
                     reload()
                 },
-                onFailure = { _message.value = "保存失败: ${it.message}" }
+                onFailure = { _message.value = "Save failed: ${it.message}" }
             )
             _busy.value = false
         }
@@ -106,10 +106,10 @@ class PoliciesViewModel(
             _busy.value = true
             repo.removeDisplayPolicy(uid).fold(
                 onSuccess = {
-                    _message.value = "策略已移除 uid=$uid"
+                    _message.value = "Policy removed for uid=$uid"
                     reload()
                 },
-                onFailure = { _message.value = "移除失败: ${it.message}" }
+                onFailure = { _message.value = "Remove failed: ${it.message}" }
             )
             _busy.value = false
         }

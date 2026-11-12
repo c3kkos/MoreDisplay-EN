@@ -11,10 +11,10 @@ import io.github.ynkcc.moredisplay.core.Transport
 import io.github.ynkcc.moredisplay.daemon.ProviderRpc
 
 /**
- * App → system_server 守护进程的 RPC 通道。
+ * RPC channel from the app to the system_server daemon.
  *
- * 走 `content://settings` 提供者（其进程即 system_server），
- * 由模块在 system_server 内 Hook `SettingsProvider#call` 应答。
+ * Goes through the `content://settings` provider (whose process is system_server),
+ * answered by the module hooking `SettingsProvider#call` inside system_server.
  */
 class ProviderTransport(
     private val context: Context
@@ -23,7 +23,7 @@ class ProviderTransport(
     companion object {
         private const val TAG = "ProviderTransport"
 
-        /** 探测守护进程是否已在 system_server 中就绪。 */
+        /** Probes whether the daemon is ready inside system_server. */
         fun ping(context: Context): Boolean = runCatching {
             val reply = call(context, RpcRequest.Ping(0))
             RpcCodec.unmarshallResponse(reply) is RpcResponse.Pong
@@ -50,7 +50,7 @@ class ProviderTransport(
         RpcCodec.unmarshallResponse(call(context, request))
 
     override fun onDisconnected(handler: (() -> Unit)?) {
-        // provider 调用是一次性 IPC，没有长连接，无需死亡通知。
+        // A provider call is a one-shot IPC with no long-lived connection, so no death notification is needed.
     }
 
     override fun close() = Unit

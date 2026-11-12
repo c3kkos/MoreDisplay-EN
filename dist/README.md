@@ -1,6 +1,6 @@
 # MoreDisplay
 
-MoreDisplay is an Xposed/LSPosed module that runs **only inside `system_server`**. It manages
+MoreDisplay is a modern Xposed module (libxposed API 102) for Vector that runs **only inside `system_server`**. It manages
 virtual displays from the system side and lets you decide, per app, which displays that app can
 see, which display it records, and which display its accessibility gestures land on.
 
@@ -19,7 +19,7 @@ module scope stays a single package.
 
 ## Requirements
 
-- LSPosed 1.9.3+ (LibXposed API 102).
+- [Vector](https://github.com/JingMatrix/Vector) v2.0+ (or any framework implementing libxposed API 102), with Zygisk enabled.
 - Android 10 (API 29) or above. Developed and verified on Android 16 (API 36).
 - Recommended scope: **`system`** (system server) only. Nothing else needs to be checked.
 
@@ -33,7 +33,7 @@ differences degrade to a log line instead of a boot loop.
 
 ## Usage
 
-Enable the module in LSPosed, reboot, then either use the app UI or drive it over adb:
+Enable the module in the Vector manager with the System Framework (`system`) scope, reboot, then either use the app UI or drive it over adb:
 
 ```sh
 # create a managed display (flags=1 -> PUBLIC)

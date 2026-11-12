@@ -10,11 +10,11 @@ import android.os.Build
 import android.os.IBinder
 
 /**
- * Android 14+ 的硬要求：调用 `MediaProjectionManager.getMediaProjection()` 之前，
- * 必须已经有一个 `foregroundServiceType="mediaProjection"` 的前台服务在跑，
- * 否则会抛 `SecurityException`。
+ * A hard requirement on Android 14+: before calling `MediaProjectionManager.getMediaProjection()`,
+ * a foreground service with `foregroundServiceType="mediaProjection"` must already be running,
+ * otherwise a `SecurityException` is thrown.
  *
- * 探测程序按真实录屏 App 的写法照做，避免「验证不了」被误判成「方案不行」。
+ * The probe follows exactly what a real screen-recording app does, so "couldn't verify" isn't mistaken for "the approach doesn't work".
  */
 class CaptureForegroundService : Service() {
 
@@ -46,7 +46,7 @@ class CaptureForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("MoreDisplay Probe")
-            .setContentText("MediaProjection 探测进行中")
+            .setContentText("MediaProjection probe running")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

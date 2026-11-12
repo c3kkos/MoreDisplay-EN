@@ -28,10 +28,10 @@ class CommandActivity : Activity() {
         const val EXTRA_MODE = "mode"
         const val EXTRA_DISPLAY_IDS = "display_ids"
 
-        /** create 时指定守护通道：lsposed / shell_shizuku（缺省取最高优先级已连接通道）。 */
+        /** Daemon channel to use for create: lsposed (the Xposed channel, Vector or LSPosed) / shell_shizuku (defaults to the highest-priority connected channel). */
         const val EXTRA_PRIVILEGE = "privilege"
 
-        /** 需求 B：录屏时把 mirror 源改写到该 displayId。（需求 C 预留 operated_display_id） */
+        /** Requirement B: rewrite the mirror source to this displayId while recording. (operated_display_id is reserved for requirement C) */
         const val EXTRA_RECORD_DISPLAY_ID = "record_display_id"
         const val EXTRA_OPERATED_DISPLAY_ID = "operated_display_id"
 
@@ -44,7 +44,7 @@ class CommandActivity : Activity() {
         private const val ACTION_POLICY_REMOVE = "policy-remove"
         private const val ACTION_DISPLAYS_FOR_UID = "displays-for-uid"
 
-        /** 请求 Shizuku 授权（弹出系统对话框，用户点允许后日志输出结果）。 */
+        /** Request Shizuku permission (shows the system dialog; the result is logged after the user taps Allow). */
         private const val ACTION_SHIZUKU_PERMIT = "shizuku-permit"
     }
 
@@ -77,8 +77,8 @@ class CommandActivity : Activity() {
 
     private fun execute(action: String): String = runBlocking {
         val repo = App.displays()
-        // shizuku-permit 用于获取权限本身，不能依赖 connect（connect 需要权限），
-        // 否则在权限未授予时永远弹不出授权对话框（鸡生蛋问题）。
+        // shizuku-permit is used to obtain the permission itself, so it can't depend on connect (connect needs the permission);
+        // otherwise the permission dialog would never appear while the permission is not granted (chicken-and-egg problem).
         if (action != ACTION_SHIZUKU_PERMIT) {
             repo.connect().getOrElse { throw IllegalStateException("connect failed: ${it.message}", it) }
         }
@@ -132,7 +132,7 @@ class CommandActivity : Activity() {
                 val mode = Visibility.fromName(intent.getStringExtra(EXTRA_MODE))
                 val ids = intent.getIntArrayExtra(EXTRA_DISPLAY_IDS)?.toSet() ?: emptySet()
                 if (mode != Visibility.ALL && ids.isEmpty()) {
-                    throw IllegalArgumentException("mode=$mode 时必须带 --eia display_ids 1,2")
+                    throw IllegalArgumentException("mode=$mode requires --eia display_ids 1,2")
                 }
                 val policy = DisplayPolicy(
                     uid = uid,
@@ -174,8 +174,8 @@ class CommandActivity : Activity() {
             }
             ACTION_SHIZUKU_PERMIT -> {
                 if (!rikka.shizuku.Shizuku.pingBinder()) {
-                    // server 未运行或本进程尚未收到 binder；不给提示会直接抛
-                    // "binder haven't been received"，难以定位。
+                    // The server isn't running or this process hasn't received the binder yet; without a hint it would just throw
+                    // "binder haven't been received", which is hard to diagnose.
                     "shizuku server not running (start via adb: libshizuku.so, or from the Shizuku app)"
                 } else if (rikka.shizuku.Shizuku.getVersion() < 11) {
                     "shizuku server too old, upgrade shizuku"
@@ -212,7 +212,7 @@ class CommandActivity : Activity() {
         }
     }
 
-    /** 支持 `--ei uid N` 直接指定，或 `--es target_package io.github.ynkcc.moredisplay.probe` 由包名解析。 */
+    /** Supports `--ei uid N` directly, or `--es target_package io.github.ynkcc.moredisplay.probe` resolved by package name. */
     private fun resolveUid(): Int {
         val explicit = intent.getIntExtra(EXTRA_UID, -1)
         if (explicit >= 0) return explicit

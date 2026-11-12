@@ -71,21 +71,21 @@ fun HomeScreen(
 
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("可用接入方式", style = MaterialTheme.typography.titleMedium)
+                    Text("Available access methods", style = MaterialTheme.typography.titleMedium)
                     val pending = available.filter { it !in workModes.keys }
                     if (available.isEmpty()) {
                         Text(
-                            "未检测到可用接入方式：请确认 LSPosed 已启用本模块，或 Shizuku 正在运行。",
+                            "No access method detected: make sure this module is enabled in Vector (or LSPosed), or that Shizuku is running.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else if (pending.isEmpty()) {
                         Text(
-                            "所有可用通道均已接入。",
+                            "All available channels are connected.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         Text(
-                            "尚未接入，点击「连接」可补齐：",
+                            "Not connected yet; tap Connect to add:",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -137,29 +137,29 @@ private fun ConnectionCard(
                 Button(
                     onClick = onConnect,
                     enabled = status != ConnectionStatus.BINDING
-                ) { Text("连接") }
+                ) { Text("Connect") }
                 OutlinedButton(
                     onClick = onDisconnect,
                     enabled = status == ConnectionStatus.CONNECTED
-                ) { Text("断开") }
+                ) { Text("Disconnect") }
                 OutlinedButton(onClick = onRefresh) {
                     Icon(Icons.Filled.Refresh, null)
-                    Text("  刷新")
+                    Text("  Refresh")
                 }
             }
         }
     }
 }
 
-/** 已连接通道列表：每个通道独立展示工作位置与能力。 */
+/** Connected channel list: each channel shows its own daemon location and capabilities. */
 @Composable
 private fun ChannelsCard(connected: Map<Privilege, WorkModeInfo>) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("已连接通道", style = MaterialTheme.typography.titleMedium)
+            Text("Connected channels", style = MaterialTheme.typography.titleMedium)
             if (connected.isEmpty()) {
                 Text(
-                    "未连接任何通道。Shizuku 与 LSPosed 可同时工作，各自管理各自的虚拟屏。",
+                    "No channel connected. Shizuku and Xposed (Vector/LSPosed) can work at the same time, each managing its own virtual displays.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
@@ -174,19 +174,19 @@ private fun ChannelsCard(connected: Map<Privilege, WorkModeInfo>) {
                                     style = MaterialTheme.typography.titleSmall
                                 )
                                 Text(
-                                    "　守护进程：${mode.daemonLocation.label()}",
+                                    "  Daemon: ${mode.daemonLocation.label()}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FeatureChip("启动旁路", mode.capabilities.launchOnDisplayBypass)
-                                FeatureChip("解锁屏显示", mode.capabilities.unlockedDisplay)
-                                FeatureChip("特权 Surface", mode.capabilities.privilegedSurface)
-                                FeatureChip("按 uid 过滤可见性", mode.capabilities.perUidDisplayVisibility)
-                                FeatureChip("录屏替换", mode.capabilities.recordRedirection)
-                                FeatureChip("无障碍替换", mode.capabilities.accessibilityRedirection)
-                                FeatureChip("最近任务隐藏", mode.capabilities.recentsGate)
+                                FeatureChip("Launch bypass", mode.capabilities.launchOnDisplayBypass)
+                                FeatureChip("Always-unlocked display", mode.capabilities.unlockedDisplay)
+                                FeatureChip("Privileged Surface", mode.capabilities.privilegedSurface)
+                                FeatureChip("Per-uid visibility", mode.capabilities.perUidDisplayVisibility)
+                                FeatureChip("Recording redirect", mode.capabilities.recordRedirection)
+                                FeatureChip("Accessibility redirect", mode.capabilities.accessibilityRedirection)
+                                FeatureChip("Hide from recents", mode.capabilities.recentsGate)
                             }
                         }
                     }
@@ -205,22 +205,22 @@ private fun FeatureChip(text: String, enabled: Boolean = true) {
 }
 
 private fun ConnectionStatus.label(): String = when (this) {
-    ConnectionStatus.IDLE -> "未连接"
-    ConnectionStatus.BINDING -> "正在连接…"
-    ConnectionStatus.CONNECTED -> "已连接"
-    ConnectionStatus.DISCONNECTED -> "已断开"
-    ConnectionStatus.ERROR -> "连接出错"
-    ConnectionStatus.RECONNECTING -> "重连中…"
+    ConnectionStatus.IDLE -> "Not connected"
+    ConnectionStatus.BINDING -> "Connecting..."
+    ConnectionStatus.CONNECTED -> "Connected"
+    ConnectionStatus.DISCONNECTED -> "Disconnected"
+    ConnectionStatus.ERROR -> "Connection error"
+    ConnectionStatus.RECONNECTING -> "Reconnecting..."
 }
 
 private fun Privilege.label(): String = when (this) {
-    Privilege.LSPOSED -> "LSPosed（system_server）"
+    Privilege.LSPOSED -> "Xposed / Vector (system_server)"
     Privilege.ROOT -> "Root"
     Privilege.SHELL_SHIZUKU -> "Shizuku"
-    Privilege.NONE -> "无"
+    Privilege.NONE -> "None"
 }
 
-/** 与 DaemonProvider.priority 对齐的展示排序。 */
+/** Display ordering aligned with DaemonProvider.priority. */
 private fun Privilege.priority(): Int = when (this) {
     Privilege.LSPOSED -> 100
     Privilege.SHELL_SHIZUKU -> 50
@@ -229,7 +229,7 @@ private fun Privilege.priority(): Int = when (this) {
 }
 
 private fun DaemonLocation.label(): String = when (this) {
-    DaemonLocation.SYSTEM_SERVER -> "system_server 内"
-    DaemonLocation.STANDALONE_PROCESS -> "独立进程"
-    DaemonLocation.IN_APP -> "应用内"
+    DaemonLocation.SYSTEM_SERVER -> "in system_server"
+    DaemonLocation.STANDALONE_PROCESS -> "standalone process"
+    DaemonLocation.IN_APP -> "in app"
 }

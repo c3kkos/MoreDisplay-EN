@@ -36,30 +36,30 @@ interface IDisplayRepository {
     val managedDisplays: StateFlow<Map<Int, DisplayInfo>>
 
     /**
-     * 按通道分组的托管屏。key 为创建/托管它的通道 privilege
-     * （未知归属归入 [Privilege.NONE]），供 UI 分通道管理。
+     * Managed displays grouped by channel. The key is the privilege of the channel that created/manages it
+     * (unknown owners go under [Privilege.NONE]), for per-channel management in the UI.
      */
     val displaysByChannel: StateFlow<Map<Privilege, List<DisplayInfo>>>
 
-    /** 当前激活的最高优先级工作模式（多通道并行时的主通道）。 */
+    /** The currently active highest-priority working mode (the primary channel when several run in parallel). */
     val workMode: StateFlow<WorkModeInfo>
-    /** 所有已连接通道的工作模式，key 为通道 privilege。 */
+    /** Working modes of all connected channels, keyed by channel privilege. */
     val workModes: StateFlow<Map<Privilege, WorkModeInfo>>
 
     suspend fun connect(): Result<Unit>
     suspend fun disconnect(): Result<Unit>
 
     /**
-     * 创建虚拟屏。[privilege] 为 null 时路由到当前已连接的最高优先级通道
-     * （LSPosed > ROOT > SHELL_SHIZUKU）；显式指定时路由到对应通道，
-     * 使 Shizuku 与 LSPosed 可同时各自创建/管理自己的屏幕。
+     * Creates a virtual display. When [privilege] is null it is routed to the highest-priority connected channel
+     * (LSPosed/Xposed > ROOT > SHELL_SHIZUKU); when specified it is routed to that channel,
+     * so Shizuku and the Xposed channel can each create/manage their own displays at the same time.
      */
     suspend fun createDisplay(spec: DisplaySpec, privilege: Privilege? = null): Result<DisplayInfo>
     suspend fun holdDisplay(displayId: Int): Result<DisplayInfo>
     suspend fun removeDisplay(displayId: Int): Result<Unit>
     suspend fun listDisplays(): Result<List<DisplayInfo>>
 
-    /** 该 displayId 由哪个通道创建/托管（未知返回 null）。 */
+    /** Which channel created/manages this displayId (null if unknown). */
     fun displayOrigin(displayId: Int): Privilege?
 
     suspend fun setDisplayPolicy(policy: DisplayPolicy): Result<DisplayPolicy>

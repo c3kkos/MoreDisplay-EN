@@ -92,7 +92,7 @@ class ShizukuDaemonProvider : DaemonProvider {
         Log.i(TAG, "shizuku daemon bound, binder alive=${remote?.asBinder()?.isBinderAlive}")
     }
 
-    /** 释放当前 daemon 连接：销毁远端服务并解绑，容忍重复调用与死 binder。 */
+    /** Releases the current daemon connection: destroys the remote service and unbinds; tolerates repeated calls and dead binders. */
     private suspend fun detachLocked() {
         runCatching { remote?.destroy() }
             .onFailure { Log.d(TAG, "destroy stale daemon: ${it.message}") }
@@ -108,7 +108,7 @@ class ShizukuDaemonProvider : DaemonProvider {
         }
     }
 
-    /** 绑定 user service，瞬时失败按 500ms/1s 退避重试两次。 */
+    /** Binds the user service; transient failures are retried twice with 500ms/1s backoff. */
     private suspend fun bind(args: Shizuku.UserServiceArgs): IDaemonRpc {
         repeat(3) { attempt ->
             val connected = CompletableDeferred<IDaemonRpc>()
@@ -124,8 +124,8 @@ class ShizukuDaemonProvider : DaemonProvider {
 
                 override fun onServiceDisconnected(name: ComponentName?) {
                     Log.w(TAG, "shizuku daemon service disconnected: $name")
-                    // 旧连接的断开回调可能在新连接建立后才触发，仅当断开的
-                    // 是当前登记的连接时才清空 remote，避免误伤新绑定。
+                    // The old connection's disconnect callback may fire after the new connection is established; only clear remote
+                    // when the disconnected connection is the currently registered one, so the new binding isn't hit by mistake.
                     if (self === serviceConnection) remote = null
                 }
             }

@@ -24,5 +24,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "MoreDisplay"
 include(":app")
-// 屏幕可见性/录屏/无障碍的独立探测程序（普通 App，用于验收 system_server 侧策略）。
+// Standalone probe for display visibility / screen recording / accessibility (a normal app, used to verify the system_server-side policies).
 include(":probe")

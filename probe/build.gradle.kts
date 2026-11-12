@@ -19,7 +19,7 @@ android {
     buildTypes {
         release {
             optimization {
-                // 与 :app 保持一致：开启 R8 后 probe-release 由 2.04 MB 降到约 0.5 MB。
+                // Same as :app: with R8 enabled, probe-release shrinks from 2.04 MB to about 0.5 MB.
                 enable = true
             }
         }
@@ -33,5 +33,5 @@ android {
 dependencies {
 }
 
-// 签名配置见根 build.gradle.kts 的 subprojects 段：不签的话产物名会是
-// probe-release-unsigned.apk，CI 里按名取不到。
+// Signing config lives in the subprojects block of the root build.gradle.kts: without signing the output would be named
+// probe-release-unsigned.apk and CI could not find it by name.

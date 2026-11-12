@@ -7,23 +7,23 @@ import io.github.ynkcc.moredisplay.core.RpcCodec
 import io.github.ynkcc.moredisplay.core.RpcResponse
 
 /**
- * App ↔ system_server 守护进程的 RPC 载体。
+ * RPC carrier between the app and the system_server daemon.
  *
- * ## 为什么不是 ServiceManager / LocalSocket
- * Android 14+ 起：
- * - `ServiceManager.addService()` 对未在 `service_contexts` 登记的服务名直接抛
- *   `SecurityException: SELinux denied for service.`；
- * - 应用连接 system_server 创建的 unix socket 同样被策略禁止（只有 crash_dump 被放行）。
+ * ## Why not ServiceManager / LocalSocket
+ * Since Android 14:
+ * - `ServiceManager.addService()` throws right away for service names not registered in `service_contexts`:
+ *   `SecurityException: SELinux denied for service.`;
+ * - apps connecting to a unix socket created by system_server are also forbidden by policy (only crash_dump is allowed).
  *
- * ## 采用方案
- * 复用系统自带、已导出、且**必然运行在 system_server 进程内**的
- * `content://settings` 提供者（`com.android.providers.settings.SettingsProvider`，
- * `android:process="system"`）：App 用 `ContentResolver.call()` 同步发请求，
- * 模块 Hook `SettingsProvider#call` 就地应答。整条链路不引入新的 SELinux 依赖。
+ * ## Chosen approach
+ * Reuse the built-in, exported provider that **always runs inside the system_server process**:
+ * `content://settings` (`com.android.providers.settings.SettingsProvider`,
+ * `android:process="system"`): the app sends requests synchronously with `ContentResolver.call()`,
+ * and the module hooks `SettingsProvider#call` to answer in place. The whole path adds no new SELinux dependency.
  */
 object ProviderRpc {
 
-    /** 自定义 call method，避开 SettingsProvider 自身的 CALL_METHOD_* 命名空间。 */
+    /** Custom call method, kept out of SettingsProvider's own CALL_METHOD_* namespace. */
     const val METHOD = "moredisplay.rpc"
     const val EXTRA_REQUEST = "request"
     const val EXTRA_RESPONSE = "response"
@@ -35,7 +35,7 @@ object ProviderRpc {
             ?: return errorBundle(-1, "missing rpc payload")
         val response = runCatching {
             val request = RpcCodec.unmarshallRequest(payload)
-            // 必须清掉调用方身份：否则 DMS 会按发起 App 的 uid 做权限校验而拒绝建屏。
+            // The caller identity must be cleared: otherwise DMS checks permissions against the calling app's uid and refuses to create the display.
             val identity = Binder.clearCallingIdentity()
             try {
                 handleRequest(engine, request)

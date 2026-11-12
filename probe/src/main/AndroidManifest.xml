@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 需求 B：Android 14+ 要求先跑一个 mediaProjection 类型的前台服务，才能 getMediaProjection()。 -->
+    <!-- Requirement B: Android 14+ requires a running mediaProjection-type foreground service before getMediaProjection(). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- dumpsys display 读 mFlags 用；需 adb 授予: pm grant io.github.ynkcc.moredisplay.probe android.permission.DUMP -->
+    <!-- Used by dumpsys display to read mFlags; must be granted via adb: pm grant io.github.ynkcc.moredisplay.probe android.permission.DUMP -->
     <uses-permission android:name="android.permission.DUMP" />
 
     <application
@@ -29,7 +29,7 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
-        <!-- 需求 C：无障碍手势探测服务（不被注入，仅用公开 API）。 -->
+        <!-- Requirement C: accessibility gesture probe service (not injected, public APIs only). -->
         <service
             android:name=".ProbeAccessibilityService"
             android:exported="false"
