@@ -14,10 +14,10 @@ class DisplaysViewModel(
     private val repo: IDisplayRepository
 ) : ViewModel() {
 
-    /** 按通道分组的托管屏，UI 分通道展示与管理。 */
+    /** Managed displays grouped by channel, shown and managed per channel in the UI. */
     val displaysByChannel: StateFlow<Map<Privilege, List<DisplayInfo>>> = repo.displaysByChannel
 
-    /** 当前已连接通道。 */
+    /** Currently connected channels. */
     val workModes: StateFlow<Map<Privilege, io.github.ynkcc.moredisplay.core.WorkModeInfo>> = repo.workModes
 
     private val _busy = MutableStateFlow(false)
@@ -26,7 +26,7 @@ class DisplaysViewModel(
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message
 
-    /** 在指定通道上创建虚拟屏。 */
+    /** Creates a virtual display on the given channel. */
     fun createDisplay(
         channel: Privilege,
         width: Int,
@@ -45,10 +45,10 @@ class DisplaysViewModel(
                 channel
             ).fold(
                 onSuccess = {
-                    _message.value = "[${channel.label()}] 已创建 display ${it.displayId}"
+                    _message.value = "[${channel.label()}] Created display ${it.displayId}"
                     repo.refreshDisplays()
                 },
-                onFailure = { _message.value = "创建失败: ${it.message}" }
+                onFailure = { _message.value = "Create failed: ${it.message}" }
             )
             _busy.value = false
         }
@@ -59,10 +59,10 @@ class DisplaysViewModel(
             _busy.value = true
             repo.removeDisplay(id).fold(
                 onSuccess = {
-                    _message.value = "display $id 已移除"
+                    _message.value = "Display $id removed"
                     repo.refreshDisplays()
                 },
-                onFailure = { _message.value = "移除失败: ${it.message}" }
+                onFailure = { _message.value = "Remove failed: ${it.message}" }
             )
             _busy.value = false
         }
@@ -77,5 +77,5 @@ fun Privilege.label(): String = when (this) {
     Privilege.LSPOSED -> "LSPosed"
     Privilege.ROOT -> "Root"
     Privilege.SHELL_SHIZUKU -> "Shizuku"
-    Privilege.NONE -> "未归属"
+    Privilege.NONE -> "Unassigned"
 }
