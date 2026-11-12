@@ -11,9 +11,9 @@ enum class Screen(
     val label: String,
     val icon: ImageVector
 ) {
-    HOME("home", "主页", Icons.Filled.Home),
-    DISPLAYS("displays", "显示器", Icons.AutoMirrored.Filled.List),
-    POLICIES("policies", "策略", Icons.Filled.Settings);
+    HOME("home", "Home", Icons.Filled.Home),
+    DISPLAYS("displays", "Displays", Icons.AutoMirrored.Filled.List),
+    POLICIES("policies", "Policies", Icons.Filled.Settings);
 
     companion object {
         fun fromRoute(route: String?): Screen =
