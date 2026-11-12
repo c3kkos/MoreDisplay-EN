@@ -14,18 +14,18 @@ sealed interface RpcRequest {
     data class RemoveDisplay(override val id: Int, val displayId: Int) : RpcRequest
     data class ListDisplays(override val id: Int) : RpcRequest
 
-    /** 需求 A：下发/覆盖某个 uid 的屏幕可见性策略（立即生效，无需重启 system_server）。 */
+    /** Requirement A: set/overwrite the display visibility policy of a uid (takes effect immediately, no system_server restart needed). */
     data class SetDisplayPolicy(override val id: Int, val policy: DisplayPolicy) : RpcRequest
 
-    /** 查询某个 uid 的策略，无策略时返回 null。 */
+    /** Queries the policy of a uid; returns null if there is none. */
     data class GetDisplayPolicy(override val id: Int, val uid: Int) : RpcRequest
 
-    /** 删除某个 uid 的策略（回到默认放行）。 */
+    /** Deletes the policy of a uid (back to default pass-through). */
     data class RemoveDisplayPolicy(override val id: Int, val uid: Int) : RpcRequest
 
     data class ListDisplayPolicies(override val id: Int) : RpcRequest
 
-    /** 以 daemon 身份枚举「某个 uid 实际可见」的 displayId（用于策略验收/自查）。 */
+    /** Enumerates, as the daemon, the displayIds "a given uid actually sees" (for policy acceptance/self-check). */
     data class DisplaysForUid(override val id: Int, val uid: Int) : RpcRequest
 }
 

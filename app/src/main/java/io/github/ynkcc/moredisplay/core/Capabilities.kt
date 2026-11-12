@@ -1,11 +1,11 @@
 package io.github.ynkcc.moredisplay.core
 
 /**
- * 与 `android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_*` 逐位对齐。
+ * Bit-for-bit aligned with `android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_*`.
  *
- * 这些值会被原样交给 `DisplayManager.createVirtualDisplay(..., flags)` /
- * `VirtualDisplayConfig#setFlags`，所以必须使用平台真实位定义，
- * 不能自建一套“紧凑位序”。
+ * These values are passed unchanged to `DisplayManager.createVirtualDisplay(..., flags)` /
+ * `VirtualDisplayConfig#setFlags`, so the platform's real bit definitions must be used,
+ * not a home-made "compact bit order".
  */
 object VirtualDisplayFlags {
     const val PUBLIC = 1 shl 0
@@ -26,7 +26,7 @@ object VirtualDisplayFlags {
     const val DEVICE_DISPLAY_GROUP = 1 shl 15
     const val STEAL_TOP_FOCUS_DISABLED = 1 shl 16
 
-    /** API 37+：允许在内容模式间切换（需与 PUBLIC + TRUSTED 搭配，勿与 AUTO_MIRROR 等同时用）。 */
+    /** API 37+: allows switching between content modes (must be combined with PUBLIC + TRUSTED; don't use together with AUTO_MIRROR etc.). */
     const val ALLOWS_CONTENT_MODE_SWITCH = 1 shl 17
 }
 
@@ -36,13 +36,13 @@ data class DaemonCapabilities(
     val launchOnDisplayBypass: Boolean,
     val unlockedDisplay: Boolean,
     val privilegedSurface: Boolean,
-    /** 需求 A：能否按调用方 uid 过滤屏幕可见性（黑/白名单）。 */
+    /** Requirement A: whether display visibility can be filtered by caller uid (blacklist/whitelist). */
     val perUidDisplayVisibility: Boolean = false,
-    /** 需求 B（未实现）：录屏屏替换。 */
+    /** Requirement B (not implemented): recording display redirection. */
     val recordRedirection: Boolean = false,
-    /** 需求 C：无障碍屏替换（LSPosed 模式下已实现，见 AccessibilityRedirectHooks）。 */
+    /** Requirement C: accessibility display redirection (implemented in Xposed mode, see AccessibilityRedirectHooks). */
     val accessibilityRedirection: Boolean = false,
-    /** 需求 D：托管屏任务从最近任务剔除（LSPosed 模式下已实现，见 RecentsGate）。 */
+    /** Requirement D: remove managed-display tasks from recents (implemented in Xposed mode, see RecentsGate). */
     val recentsGate: Boolean = false
 ) {
     fun supportsFlags(flags: Int): Boolean = flags and supportedFlags.inv() == 0
