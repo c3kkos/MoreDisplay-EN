@@ -3,32 +3,32 @@ package io.github.ynkcc.moredisplay.daemon
 import android.util.Log
 
 /**
- * 「最近任务门禁」：让托管虚拟屏上的任务不出现在主屏最近任务里（binder-hook 单方案）。
+ * "Recents gate": keeps tasks on managed virtual displays out of the main display's recents (single binder-hook approach).
  *
- * ## 为什么 hook `ActivityTaskManagerService#getRecentTasks`
+ * ## Why hook `ActivityTaskManagerService#getRecentTasks`
  *
- * 所有 ROM 的所有最近任务 UI 都必须经 `IActivityTaskManager.getRecentTasks` 取数据：
- * - AOSP / LineageOS Launcher3 直连该 Binder；
- * - ColorOS 的自研 `IRecentTasks`（SystemUI Shell `RecentTasksController`）实测也收敛到
- *   `ActivityTaskManager.getRecentTasks`（反编译核实，两台真机 Android 16）。
+ * Every recents UI on every ROM must fetch its data through `IActivityTaskManager.getRecentTasks`:
+ * - AOSP / LineageOS Launcher3 calls that Binder directly;
+ * - ColorOS's own `IRecentTasks` (SystemUI Shell `RecentTasksController`) was also observed to converge on
+ *   `ActivityTaskManager.getRecentTasks` (verified by decompiling, two real devices on Android 16).
  *
- * 该入口是公共 API，签名自 Android R 起为 `(int maxNum, int flags, int userId)`
- * 且未变 —— 比 WM 内部字段/方法名（DWPC、canShowTasksInHostDeviceRecents 等）
- * 稳定得多，因此这里只做 **binder 收敛点过滤**，不做 WM 内部注入。
+ * That entry is public API; its signature has been `(int maxNum, int flags, int userId)` since Android R
+ * and hasn't changed -- far more stable than WM-internal field/method names (DWPC, canShowTasksInHostDeviceRecents, etc.),
+ * so this only does **filtering at the binder convergence point**, no WM-internal injection.
  *
- * 过滤发生在 `isVisibleRecentTask` 同层、launcher 查询时实时生效：
- * - 不受 launcher 传入 flags 影响（`RECENT_WITH_LIVE_TASKS` 等）；
- * - 只剔除 `displayId ∈ 托管屏集合`（[SystemDaemon.isManagedDisplay]）的任务，
- *   其余原样返回 —— 策略为空时行为与无模块完全一致；
- * - 任务仍在系统内部任务栈里（不杀进程、不 finish），只是不进最近任务查询结果。
+ * Filtering happens at the same level as `isVisibleRecentTask` and takes effect live whenever the launcher queries:
+ * - unaffected by the flags the launcher passes in (`RECENT_WITH_LIVE_TASKS`, etc.);
+ * - only removes tasks whose `displayId is in the managed display set` ([SystemDaemon.isManagedDisplay]);
+ *   everything else is returned unchanged -- with no policies the behavior is identical to having no module;
+ * - tasks remain in the system's internal task stack (no process killed, no finish); they just don't appear in recents query results.
  *
- * ## 兼容性设计（硬约束：动态匹配 + 失败只 log 不崩）
- * - 按方法名 + 返回类型 `android.content.pm.ParceledListSlice` 动态匹配全部重载，
- *   不硬编码参数签名（ROM 在此入口加参数也不会漏装）；
- * - 即使某 ROM 子类（如 OplusActivityTaskManagerService）覆写并改写结果，
- *   只要它回调 super，本 hook 仍生效；
- * - 列表剔除优先原地 `remove`（ATMS 传入的是新建 ArrayList）；若不可变则整体重建
- *   ParceledListSlice（反射构造器），再不行则原样放行 —— 任何一步失败都只记日志。
+ * ## Compatibility design (hard constraint: dynamic matching + failures only log, never crash)
+ * - dynamically matches all overloads by method name + return type `android.content.pm.ParceledListSlice`,
+ *   without hard-coding the parameter signature (a ROM adding parameters to this entry won't make the hook miss);
+ * - even if a ROM subclass (e.g. OplusActivityTaskManagerService) overrides and rewrites the result,
+ *   this hook still works as long as it calls super;
+ * - removal from the list is done in place with `remove` when possible (ATMS passes a freshly created ArrayList); if immutable, the
+ *   ParceledListSlice is rebuilt (reflective constructor); failing that it passes through unchanged -- any failing step only logs.
  */
 object RecentsGate {
 
@@ -36,17 +36,17 @@ object RecentsGate {
     private const val ATMS_CLASS = "com.android.server.wm.ActivityTaskManagerService"
     private const val SLICE_TYPE = "android.content.pm.ParceledListSlice"
 
-    /** hook 是否已安装（「已装」；「已生效」看 [filteredCount] > 0）。 */
+    /** Whether the hook is installed ("installed"; "effective" means [filteredCount] > 0). */
     @Volatile
     var hookInstalled: Boolean = false
         private set
 
-    /** hook 装载的目标方法数。 */
+    /** Number of target methods the hook was installed on. */
     @Volatile
     var targetCount: Int = 0
         private set
 
-    /** 过滤命中数（每次真的剔除任务才递增）。 */
+    /** Filter hit count (incremented only when tasks are actually removed). */
     @Volatile
     var filteredCount: Int = 0
         private set
@@ -54,17 +54,17 @@ object RecentsGate {
     fun stats(): String = "installed=$hookInstalled targets=$targetCount filtered=$filteredCount"
 
     /**
-     * 托管屏判定回调，由模块入口在装 hook 时注入（避免 daemon ↔ xposed 反向依赖）。
-     * 返回 true 表示该 displayId 由我们托管，其任务应从最近任务剔除。
+     * Managed-display check callback, injected by the module entry when installing the hook (avoids a daemon <-> xposed reverse dependency).
+     * Returns true if the displayId is managed by us and its tasks should be removed from recents.
      */
     @Volatile
     var isManagedDisplay: ((Int) -> Boolean)? = null
 
     /**
-     * 在 ATMS 上动态匹配 getRecentTasks 目标方法。由 [io.github.ynkcc.moredisplay.xposed.LsposedModule]
-     * 在 system_server 启动期调用并执行 hook。
+     * Dynamically matches the getRecentTasks target methods on ATMS. Called by [io.github.ynkcc.moredisplay.xposed.LsposedModule]
+     * during system_server startup, which then installs the hook.
      *
-     * @return 命中的方法数（0 = 匹配失败，调用方记 ERROR）。
+     * @return number of matched methods (0 = matching failed; the caller logs ERROR).
      */
     fun findTargets(classLoader: ClassLoader): List<java.lang.reflect.Method> {
         val atms = runCatching { classLoader.loadClass(ATMS_CLASS) }
@@ -81,14 +81,14 @@ object RecentsGate {
         return targets
     }
 
-    /** 标记安装结果（供日志与 stats 用）。 */
+    /** Records the installation result (for logs and stats). */
     fun markInstalled(count: Int) {
         targetCount = count
         hookInstalled = count > 0
     }
 
     /**
-     * hook 的 after 回调：从结果里剔除托管屏任务。绝不抛出，失败原样放行。
+     * The hook's after-callback: removes managed-display tasks from the result. Never throws; on failure passes through unchanged.
      */
     fun filterRecentTasks(result: Any?): Any? {
         if (result == null) return null
@@ -113,7 +113,7 @@ object RecentsGate {
         }.getOrDefault(false)
 
         if (!iterated) {
-            // 列表不可变：重建 slice 兜底一次。
+            // List is immutable: rebuild the slice once as a fallback.
             return runCatching {
                 val kept = list.filter { t ->
                     val disp: Int = t?.let {

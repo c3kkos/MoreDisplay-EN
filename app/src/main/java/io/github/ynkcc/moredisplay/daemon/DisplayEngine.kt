@@ -48,13 +48,13 @@ fun handleRequest(engine: DisplayEngine, request: RpcRequest): RpcResponse = whe
     is RpcRequest.ListDisplays -> RpcResponse.DisplayList(request.id, engine.listDisplays())
 
     is RpcRequest.SetDisplayPolicy -> {
-        // 需求 B 前置校验：录屏替换目标屏必须真实存在，否则会让镜像指向一个死 id。
+        // Requirement B precondition: the recording redirect target display must actually exist, otherwise the mirror would point at a dead id.
         val recordId = request.policy.recordDisplayId
         if (recordId != null && !DisplayQuery.rawDisplayIds().contains(recordId)) {
             RpcResponse.Error(
                 request.id,
                 7,
-                "recordDisplayId=$recordId 当前不存在，请先 create 托管屏（现有 ${DisplayQuery.rawDisplayIds()}）"
+                "recordDisplayId=$recordId does not exist; create a managed display first (existing: ${DisplayQuery.rawDisplayIds()})"
             )
         } else {
             runCatching {
@@ -93,7 +93,7 @@ fun handleRequest(engine: DisplayEngine, request: RpcRequest): RpcResponse = whe
     }
 }
 
-/** 打印 Hook 命中计数，区分「已装」与「已生效」。 */
+/** Prints hook hit counters, distinguishing "installed" from "effective". */
 private fun logHookStats(trigger: String) {
     DisplayPolicyRegistry.statsProvider?.invoke()?.let {
         android.util.Log.i("MoreDisplay_Policy", "hook stats @$trigger: $it")

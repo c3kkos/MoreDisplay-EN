@@ -15,28 +15,28 @@ import io.github.ynkcc.moredisplay.core.Privilege
 import io.github.ynkcc.moredisplay.dispatch.CapabilityMatrix
 
 /**
- * 运行在 system_server（LSPosed 注入）内的显示器引擎。
+ * Display engine running inside system_server (injected by the Xposed framework: Vector / LSPosed).
  *
- * 与 [ShellDisplayEngine] 的差别只在执行身份：这里以 uid 1000 / 包名 `android` 创建虚拟屏，
- * 因此可以携带 `TRUSTED` 等特权 flag，且归属 system_server，
- * 调用方 App 进程退出也不会带走已创建的屏幕。
+ * The only difference from [ShellDisplayEngine] is the execution identity: here virtual displays are created as uid 1000 / package `android`,
+ * so they can carry privileged flags such as `TRUSTED`, they belong to system_server,
+ * and the calling app's process exiting doesn't take the created displays with it.
  *
- * ## 为什么直接走 `DisplayManagerGlobal` 而不是 `DisplayManager`
- * 引擎在 AMS 构造完成时就被创建，那一刻 DisplayManagerService 还没注册，
- * `DisplayManager` 构造期捕获的 `mGlobal` 会是 null（且该实例已被 Context 缓存），
- * 之后再调用 `createVirtualDisplay` 必然 NPE。
- * `DisplayManagerGlobal.getInstance()` 是静态方法、每次都会重试取服务，因此安全。
+ * ## Why go through `DisplayManagerGlobal` directly instead of `DisplayManager`
+ * The engine is created as soon as AMS construction completes; at that moment DisplayManagerService is not registered yet,
+ * so the `mGlobal` captured when `DisplayManager` is constructed would be null (and that instance is already cached by the Context);
+ * any later call to `createVirtualDisplay` would inevitably NPE.
+ * `DisplayManagerGlobal.getInstance()` is static and retries fetching the service every time, so it is safe.
  *
- * ## 为什么必须给它挂一个「丢弃型」输出 Surface（实测踩坑）
- * `VirtualDisplayDevice` 的 `mDisplayState` 取决于**有没有输出 Surface**：没有 surface 时
- * `DisplayDeviceInfo.state` 会是 `STATE_OFF`，SurfaceFlinger 不会对该屏做合成，
- * 于是该屏上的 App 拿不到 vsync、窗口一直停在 `mDrawState=NO_SURFACE / mLastHidden=true`，
- * 永远不绘制 —— 表现就是「Activity 起得来（任务栈确实在 display N），但一张画面都没有」，
- * 自然也就录不到任何内容。
+ * ## Why it must have a "discarding" output Surface attached (learned the hard way)
+ * A `VirtualDisplayDevice`'s `mDisplayState` depends on **whether it has an output Surface**: without a surface
+ * `DisplayDeviceInfo.state` is `STATE_OFF`, and SurfaceFlinger won't composite that display,
+ * so apps on it get no vsync and their windows stay at `mDrawState=NO_SURFACE / mLastHidden=true`,
+ * never drawing -- the symptom is "the Activity starts (the task really is on display N), but not a single frame appears",
+ * and naturally nothing can be recorded.
  *
- * 因此这里用一个 system_server 内的 `ImageReader` 当**输出接收端**：它让该屏变成
- * `state ON`、被真正合成；回调里立刻 `close()` 掉图像（只当 Sink，不消费内容），
- * 这样缓冲区会立刻回收、不会把合成卡住。托管屏的**内容**始终是它自己的 layer stack。
+ * So a system_server-side `ImageReader` is used as the **output receiver**: it makes the display
+ * `state ON` and actually composited; the callback immediately `close()`s each image (used only as a sink, content not consumed),
+ * so buffers are recycled right away and composition never stalls. The managed display's **content** is always its own layer stack.
  */
 class SystemDisplayEngine(
     private val systemContext: Context
@@ -51,7 +51,7 @@ class SystemDisplayEngine(
     private val managed = LinkedHashMap<Int, DisplayInfo>()
     private val handles = LinkedHashMap<Int, VirtualDisplay>()
 
-    /** displayId → 该屏的输出接收端（丢弃型 sink）。 */
+    /** displayId -> that display's output receiver (discarding sink). */
     private val sinks = LinkedHashMap<Int, ImageReader>()
 
     private val sinkThread = HandlerThread("MoreDisplay-display-sink").apply { start() }
@@ -104,8 +104,8 @@ class SystemDisplayEngine(
     }
 
     /**
-     * 建一个「只接收、立刻丢弃」的输出 Surface，让该虚拟屏被 SurfaceFlinger 真正合成（state ON）。
-     * 尺寸按屏分辨率给，实际 buffer 尺寸由生产端（SurfaceFlinger）决定。
+     * Creates an output Surface that "only receives and immediately discards", so SurfaceFlinger really composites this virtual display (state ON).
+     * Sized to the display resolution; the actual buffer size is decided by the producer (SurfaceFlinger).
      */
     private fun newSink(width: Int, height: Int): Sink {
         val reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
