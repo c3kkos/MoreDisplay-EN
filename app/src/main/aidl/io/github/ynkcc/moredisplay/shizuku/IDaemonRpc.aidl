@@ -2,12 +2,12 @@ package io.github.ynkcc.moredisplay.shizuku;
 
 interface IDaemonRpc {
     /**
-     * 执行一次 RPC：payload 为 RpcCodec 序列化的 RpcRequest，返回序列化的 RpcResponse。
+     * Executes one RPC: payload is an RpcRequest serialized by RpcCodec; returns a serialized RpcResponse.
      */
     byte[] invoke(in byte[] payload);
 
     /**
-     * 销毁服务：释放全部托管的虚拟显示器并退出进程。
+     * Destroys the service: releases all managed virtual displays and exits the process.
      */
     void destroy();
 }
