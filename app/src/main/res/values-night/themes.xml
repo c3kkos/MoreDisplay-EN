@@ -1,7 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- 项目为全 Compose，颜色由 Compose MaterialTheme 决定。
-         这里只保留窗口/系统栏属性，不再继承 View 版 MaterialComponents，
-         以便移除 com.google.android.material 与 androidx.appcompat 依赖。 -->
+    <!-- The project is pure Compose; colors come from the Compose MaterialTheme.
+         Only window / system bar attributes are kept here, no longer inheriting the View-based MaterialComponents,
+         so the com.google.android.material and androidx.appcompat dependencies can be removed. -->
     <style name="Theme.MoreDisplay" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:statusBarColor">@color/purple_700</item>
         <item name="android:windowBackground">@android:color/transparent</item>
