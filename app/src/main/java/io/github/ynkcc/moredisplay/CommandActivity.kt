@@ -120,11 +120,18 @@ class CommandActivity : Activity() {
                 }
                 "display ${info.displayId} held"
             }
-            ACTION_LIST -> repo.listDisplays().getOrElse {
-                throw IllegalStateException("listDisplays failed: ${it.message}", it)
-            }.joinToString(prefix = "displays: ") {
-                val via = repo.displayOrigin(it.displayId)?.let { p -> "@$p" } ?: ""
-                "${it.displayId}(${it.spec.width}x${it.spec.height}@${it.spec.densityDpi}$via)"
+            ACTION_LIST -> {
+                // The device's own screen is always listed first as the default managed display.
+                val builtIn = io.github.ynkcc.moredisplay.ui.BuiltInDisplay.query(this@CommandActivity)
+                    ?.let { "${it.displayId}(${it.width}x${it.height}@${it.densityDpi}@builtin)" }
+                    ?: "${io.github.ynkcc.moredisplay.ui.BuiltInDisplay.ID}(builtin)"
+                val virtual = repo.listDisplays().getOrElse {
+                    throw IllegalStateException("listDisplays failed: ${it.message}", it)
+                }.map {
+                    val via = repo.displayOrigin(it.displayId)?.let { p -> "@$p" } ?: ""
+                    "${it.displayId}(${it.spec.width}x${it.spec.height}@${it.spec.densityDpi}$via)"
+                }
+                (listOf(builtIn) + virtual).joinToString(prefix = "displays: ")
             }
 
             ACTION_POLICY_SET -> {
