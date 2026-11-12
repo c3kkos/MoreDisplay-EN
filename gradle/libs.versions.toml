@@ -12,8 +12,8 @@ androidxAnnotation = "1.11.0"
 shizuku = "13.1.5"
 kotlin = "2.4.20"
 composeBom = "2026.09.00"
-# material-icons 已脱离 Compose BOM（BOM 2024.12+ / material3 1.4 起不再传递引入），
-# 需显式声明版本；1.7.8 为独立版本线的最终稳定版。
+# material-icons has been split out of the Compose BOM (no longer pulled in transitively since BOM 2024.12+ / material3 1.4),
+# so its version must be declared explicitly; 1.7.8 is the final stable release of that standalone version line.
 composeIcons = "1.7.8"
 activityCompose = "1.10.1"
 navigationCompose = "2.10.2"
