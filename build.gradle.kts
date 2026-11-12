@@ -1,15 +1,15 @@
 import com.android.build.api.dsl.ApplicationExtension
 import java.util.Base64
 
-// ---- 构建类路径漏洞修复（Dependabot alerts #1-#9）----
-// 这些包由 AGP 传递引入，仅存在于 buildscript 类路径，不进 APK。
-// 强制解析到无漏洞版本（kotlin-gradle-plugin 为 AGP 内嵌工具链，不强升以保兼容）。
-// 注意：buildscript{} 必须位于 plugins{} 之前。
+// ---- Build classpath vulnerability fixes (Dependabot alerts #1-#9) ----
+// These packages are pulled in transitively by AGP and live only on the buildscript classpath, never in the APK.
+// Force them to non-vulnerable versions (kotlin-gradle-plugin is AGP's embedded toolchain; not force-upgraded, for compatibility).
+// Note: buildscript{} must come before plugins{}.
 buildscript {
     configurations.classpath {
         resolutionStrategy {
             force(
-                // bcprov < 1.85 有 critical CVE
+                // bcprov < 1.85 has a critical CVE
                 "org.bouncycastle:bcprov-jdk18on:1.85",
                 "org.bouncycastle:bcpkix-jdk18on:1.85",
                 "org.bouncycastle:bcutil-jdk18on:1.85",
@@ -26,15 +26,15 @@ plugins {
     alias(libs.plugins.android.application) apply false
 }
 
-// ---- 统一的 release 签名配置（密钥不入库）----
-// 来源优先级：环境变量 > gradle.properties > 无。
-//   RELEASE_KEYSTORE_FILE   : 已有的 .jks / .keystore 路径（本地常用）
-//   RELEASE_KEYSTORE_BASE64 : keystore 文件的 base64（CI 用，配合 GitHub Secrets）
+// ---- Shared release signing configuration (keys are never committed) ----
+// Source priority: environment variables > gradle.properties > none.
+//   RELEASE_KEYSTORE_FILE   : path to an existing .jks / .keystore (typical for local builds)
+//   RELEASE_KEYSTORE_BASE64 : base64 of the keystore file (for CI, together with GitHub Secrets)
 //   RELEASE_STORE_PASSWORD / RELEASE_KEY_ALIAS / RELEASE_KEY_PASSWORD
-// 四项任缺其一 => 不做签名配置，release 构建退化为未签名（不会因此失败）。
+// If any of the four values is missing => no signing config; the release build falls back to unsigned (it does not fail).
 //
-// 两个 application 模块（:app 模块本体、:probe 验收探测程序）都要签，
-// 否则未签名产物名是 *-release-unsigned.apk，CI 按名取不到。
+// Both application modules (:app, the module itself, and :probe, the acceptance probe) must be signed,
+// otherwise the unsigned output is named *-release-unsigned.apk and CI cannot find it by name.
 subprojects {
     plugins.withId("com.android.application") {
         fun envOrProp(name: String): String? =
@@ -64,8 +64,8 @@ subprojects {
                 buildTypes.getByName("release") {
                     signingConfig = signingConfigs.getByName("release")
                 }
-                // debug 复用 release 签名：与 release 包可互相覆盖安装，
-                // Xposed / Shizuku 场景签名校验一致；debuggable 不受影响。
+                // debug reuses the release signature: debug and release packages can be installed over each other,
+                // and signature checks stay consistent for Xposed / Shizuku; debuggable is unaffected.
                 buildTypes.getByName("debug") {
                     signingConfig = signingConfigs.getByName("release")
                 }

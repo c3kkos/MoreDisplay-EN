@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased (English / Vector fork)
+
+### Changed
+- **English only.** Every Chinese UI string, log message, comment, build script note and doc line
+  has been translated to English; the source tree contains no CJK characters anymore.
+- **Vector compatibility.** The module already targets libxposed API 102, which is exactly the
+  API revision pinned by [Vector](https://github.com/JingMatrix/Vector) master. On top of that:
+  - Added `android:description` to the manifest. Vector's manager reads a modern module's
+    description from this attribute, so it was previously shown blank.
+  - Comments, UI hints and docs now refer to the correct libxposed scope (`system`, i.e. system
+    server, matching `META-INF/xposed/scope.list`) instead of `android`, and to Vector rather than
+    LSPosed 1.9.x.
+
 ## 1.1 (versionCode 2) — 2026-10-10
 
 ### Fixed
@@ -20,7 +33,7 @@
   `@android:style/Theme.Material(.Light).NoActionBar`; `ui-tooling-preview` is debug-only.
 
 ### Probe
-- New `设备信息` button and `--es task info` dump every display device from `dumpsys display`:
+- New `Device info` button and `--es task info` dump every display device from `dumpsys display`:
   displayId, name, size, dpi, type, state/committedState, touch, owner uid, mirror source and
   FLAG_* bits. `state` is the key diagnostic — a virtual display without an output Surface
   reports OFF.
