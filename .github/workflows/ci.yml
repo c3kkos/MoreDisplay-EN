@@ -25,9 +25,9 @@ jobs:
           distribution: temurin
           java-version: '25'
 
-      # runner 镜像自带 Android SDK；缺失的 platform / build-tools 由 AGP 自行下载。
-      # 不要用 android-actions/setup-android：它的默认 packages 含已被移除的 `tools` 包，
-      # 在新版 cmdline-tools 上会直接失败。
+      # The runner image ships an Android SDK; missing platforms / build-tools are downloaded by AGP itself.
+      # Don't use android-actions/setup-android: its default packages include the removed `tools` package,
+      # which fails outright on recent cmdline-tools.
       - name: Accept SDK licenses
         run: yes | sdkmanager --licenses > /dev/null 2>&1 || true
 
