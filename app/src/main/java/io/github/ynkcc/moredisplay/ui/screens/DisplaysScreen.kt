@@ -53,7 +53,7 @@ import io.github.ynkcc.moredisplay.ui.CreateHistoryStore
 import io.github.ynkcc.moredisplay.ui.viewmodel.DisplaysViewModel
 import io.github.ynkcc.moredisplay.ui.viewmodel.label
 
-/** 列表实时轮询周期（ms）。列表以守护进程为准，轮询保证外部变化也能反映。 */
+/** Live polling interval for the list (ms). The daemon is the source of truth; polling makes external changes show up too. */
 private const val REFRESH_INTERVAL_MS = 3000L
 
 @Composable
@@ -66,10 +66,10 @@ fun DisplaysScreen(
     val busy by vm.busy.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
 
-    // null = 关闭；非 null = 在该通道上创建
+    // null = closed; non-null = create on that channel
     var createChannel by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // 进入页面即刷新，并在可见期间轮询，保证列表实时反映守护进程状态。
+    // Refresh on entering the page and poll while visible, so the list reflects the daemon state in real time.
     LaunchedEffect(Unit) {
         vm.refresh()
         while (isActive) {
@@ -99,9 +99,9 @@ fun DisplaysScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Text("未连接任何通道", style = MaterialTheme.typography.titleMedium)
+                Text("No channel connected", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "请先在主页连接；Shizuku 与 LSPosed 各自独立管理虚拟屏。",
+                    "Connect on the Home page first; Shizuku and Xposed (Vector/LSPosed) each manage their own virtual displays.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -126,7 +126,7 @@ fun DisplaysScreen(
                     if (list.isEmpty()) {
                         item(key = "empty-${channel.name}") {
                             Text(
-                                "该通道暂无托管屏",
+                                "No managed displays on this channel",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 8.dp)
@@ -164,7 +164,7 @@ fun DisplaysScreen(
     }
 }
 
-/** 通道分区头：通道名 + 屏数量 + 独立的创建入口。 */
+/** Channel section header: channel name + display count + its own create button. */
 @Composable
 private fun ChannelSectionHeader(
     channel: Privilege,
@@ -179,13 +179,13 @@ private fun ChannelSectionHeader(
         ) {
             Text(channel.label(), style = MaterialTheme.typography.titleMedium)
             Text(
-                "　$count 块",
+                "  $count display(s)",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.weight(1f))
             IconButton(onClick = onCreate, enabled = enabled) {
-                Icon(Icons.Filled.Add, contentDescription = "在 ${channel.label()} 上创建")
+                Icon(Icons.Filled.Add, contentDescription = "Create on ${channel.label()}")
             }
         }
     }
@@ -207,7 +207,7 @@ private fun DisplayCard(
                 )
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = onRemove, enabled = enabled) {
-                    Icon(Icons.Filled.Delete, contentDescription = "移除")
+                    Icon(Icons.Filled.Delete, contentDescription = "Remove")
                 }
             }
             Text(
@@ -238,7 +238,7 @@ private fun CreateDisplayDialog(
     onDismiss: () -> Unit,
     onCreate: (Int, Int, Int, String, Int) -> Unit
 ) {
-    // 不再预设尺寸/dpi，初始为空，由用户输入或从历史记录填充。
+    // No preset size/dpi anymore; starts empty and is filled in by the user or from history.
     var width by rememberSaveable { mutableStateOf("") }
     var height by rememberSaveable { mutableStateOf("") }
     var dpi by rememberSaveable { mutableStateOf("") }
@@ -254,14 +254,14 @@ private fun CreateDisplayDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("在 ${channel.label()} 上创建") },
+        title = { Text("Create on ${channel.label()}") },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (history.isNotEmpty()) {
-                    // 最近使用的尺寸，水平并排，点击快速填充。
+                    // Recently used sizes, side by side; tap to fill in quickly.
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         history.take(CreateHistoryStore.MAX_ENTRIES).forEach { e ->
                             AssistChip(onClick = {
@@ -275,16 +275,16 @@ private fun CreateDisplayDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = width, onValueChange = { width = it },
-                        label = { Text("宽度") },
-                        placeholder = { Text("如 1080", style = MaterialTheme.typography.bodySmall) },
+                        label = { Text("Width") },
+                        placeholder = { Text("e.g. 1080", style = MaterialTheme.typography.bodySmall) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         isError = width.isNotEmpty() && w !in 1..7680,
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
                         value = height, onValueChange = { height = it },
-                        label = { Text("高度") },
-                        placeholder = { Text("如 1920", style = MaterialTheme.typography.bodySmall) },
+                        label = { Text("Height") },
+                        placeholder = { Text("e.g. 1920", style = MaterialTheme.typography.bodySmall) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         isError = height.isNotEmpty() && h !in 1..7680,
                         modifier = Modifier.weight(1f)
@@ -292,15 +292,15 @@ private fun CreateDisplayDialog(
                     }
                     OutlinedTextField(
                     value = dpi, onValueChange = { dpi = it },
-                    label = { Text("密度 (dpi)") },
-                    placeholder = { Text("如 320", style = MaterialTheme.typography.bodySmall) },
+                    label = { Text("Density (dpi)") },
+                    placeholder = { Text("e.g. 320", style = MaterialTheme.typography.bodySmall) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     isError = dpi.isNotEmpty() && d !in 10..2000,
                     modifier = Modifier.fillMaxWidth()
                     )
                 OutlinedTextField(
                     value = name, onValueChange = { name = it },
-                    label = { Text("名称") },
+                    label = { Text("Name") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -312,8 +312,8 @@ private fun CreateDisplayDialog(
                     singleLine = true,
                     supportingText = {
                         Text(
-                            flags?.let { "解析为 0x${Integer.toHexString(it)} ($it)" }
-                                ?: "无效的 flags 值，请输入 0x 开头的十六进制或十进制数字",
+                            flags?.let { "Parsed as 0x${Integer.toHexString(it)} ($it)" }
+                                ?: "Invalid flags value; enter a hex number starting with 0x or a decimal number",
                             style = MaterialTheme.typography.bodySmall
                         )
                     },
@@ -335,14 +335,14 @@ private fun CreateDisplayDialog(
                 enabled = valid && !busy,
                 onClick = { flags?.let { onCreate(w, h, d, name, it) } }
             ) {
-                Text("创建")
+                Text("Create")
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
 
-/** 解析 flags 输入：支持十六进制（大小写均可）与纯十进制；无效时返回 null。 */
+/** Parses the flags input: supports hexadecimal (any case) and plain decimal; returns null if invalid. */
 private fun parseFlags(text: String): Int? {
     val s = text.trim()
     if (s.isEmpty()) return null
@@ -353,7 +353,7 @@ private fun parseFlags(text: String): Int? {
     return if (value in 0..0xFFFFFFFFL) value.toInt() else null
 }
 
-/** 与 DaemonProvider.priority 对齐的展示排序。 */
+/** Display ordering aligned with DaemonProvider.priority. */
 private fun Privilege.priority(): Int = when (this) {
     Privilege.LSPOSED -> 100
     Privilege.SHELL_SHIZUKU -> 50
