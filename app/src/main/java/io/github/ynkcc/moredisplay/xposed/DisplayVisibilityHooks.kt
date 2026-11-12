@@ -8,36 +8,36 @@ import java.lang.reflect.Field
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * 需求 A：按调用方 uid 过滤屏幕可见性（黑名单 / 白名单）。
+ * Requirement A: filter display visibility by caller uid (blacklist / whitelist).
  *
- * ## 为什么全部落在 system_server 侧
- * 模块作用域只有 `android`。所有 `IDisplayManager` 的 binder 请求与所有
- * `DisplayListener` 事件都在 system_server 内产生，所以在这里裁剪即可覆盖全部 App，
- * **完全不需要 Hook 目标 App 进程**。
+ * ## Why everything happens on the system_server side
+ * The module scope is only `system` (system_server). All `IDisplayManager` binder requests and all
+ * `DisplayListener` events originate inside system_server, so filtering here covers every app,
+ * **with no need to hook the target app's process at all**.
  *
- * ## 挂载点（签名已用 dexdump 在真机 services.jar 上核实，Android 16 / SDK 36）
+ * ## Hook points (signatures verified with dexdump on a real device's services.jar, Android 16 / SDK 36)
  * 1. `DisplayManagerService$BinderService#getDisplayIds(Z)[I`
- *    —— App 拿列表的 binder 入口（`DisplayManager.getDisplays()` 也走它）。
- *    实测：`Binder.getCallingUid()` → `clearCallingIdentity()` → `LogicalDisplayMapper.getDisplayIdsLocked(uid, includeDisabled)`。
- *    所以必须在 `chain.proceed()` **之前**取 `Binder.getCallingUid()`，再对返回的 `int[]` 裁剪。
+ *    -- the binder entry apps use to get the list (`DisplayManager.getDisplays()` goes through it too).
+ *    Observed: `Binder.getCallingUid()` -> `clearCallingIdentity()` -> `LogicalDisplayMapper.getDisplayIdsLocked(uid, includeDisabled)`.
+ *    So `Binder.getCallingUid()` must be read **before** `chain.proceed()`, then the returned `int[]` is filtered.
  * 2. `DisplayManagerService#getDisplayInfoInternal(II)Landroid/view/DisplayInfo;`
- *    —— 点名入口，第二个参数就是 `callingUid`。
- *    实测调用链：`BinderService.getDisplayInfo(I)` → `getDisplayInfoInternal(displayId, callingUid)`；
- *    系统自身走 `LocalService.getDisplayInfo(I)` → `getDisplayInfoInternal(displayId, Process.myUid())`。
- *    命中策略即返回 `null`（“猜 id 也拿不到”）。
- * 3. 事件投递（per-callback 汇聚点，两层保险）
+ *    -- the by-id entry; the second parameter is `callingUid`.
+ *    Observed call chain: `BinderService.getDisplayInfo(I)` -> `getDisplayInfoInternal(displayId, callingUid)`;
+ *    the system itself goes through `LocalService.getDisplayInfo(I)` -> `getDisplayInfoInternal(displayId, Process.myUid())`.
+ *    On a policy match it returns `null` ("guessing the id doesn't help either").
+ * 3. Event delivery (per-callback convergence point, two layers of safety)
  *    - `DisplayManagerService$CallbackRecord#notifyDisplayEventAsync(II)Z`
- *      —— `DisplayManagerService.deliverDisplayEvent(...)` 对每个回调调用的入口（真机 dexdump 核实）。
- *      `this` 是 `CallbackRecord`，`mUid` 字段即接收方 uid；命中策略时返回 `false`（不投递）。
+ *      -- the entry `DisplayManagerService.deliverDisplayEvent(...)` calls for each callback (verified via dexdump on a real device).
+ *      `this` is the `CallbackRecord`, and its `mUid` field is the receiver's uid; on a policy match it returns `false` (not delivered).
  *    - `DisplayManagerService$CallbackRecord#transmitDisplayEvent(II)V`
- *      —— 最后一跳 `mCallback.onDisplayEvent(displayId, event)`；
- *      `dispatchPending()`（缓存事件补投）与 `notifyDisplayEventAsync()` 都汇聚到这里，作为兜底。
- *    两个 Hook 合起来覆盖 `onDisplayAdded/onDisplayRemoved/onDisplayChanged`，
- *    也包括「回调未就绪被缓存、稍后 dispatchPending 补投」的情况。
+ *      -- the final hop `mCallback.onDisplayEvent(displayId, event)`;
+ *      `dispatchPending()` (re-delivery of cached events) and `notifyDisplayEventAsync()` both converge here, acting as a fallback.
+ *    Together the two hooks cover `onDisplayAdded/onDisplayRemoved/onDisplayChanged`,
+ *    including the case where "the callback wasn't ready, the event was cached and re-delivered later by dispatchPending".
  *
- * ## 默认放行
- * 没有策略条目、或调用方不是 App uid（uid<10000：system/systemui/shell/root…）时，
- * 所有 Hook 都走原路径，行为与未装模块完全一致。
+ * ## Pass-through by default
+ * With no policy entry, or when the caller is not an app uid (uid<10000: system/systemui/shell/root...),
+ * every hook takes the original path, behaving exactly as without the module.
  */
 private const val TAG = "MoreDisplay_Visibility"
 
@@ -51,10 +51,10 @@ private val transmitHits = AtomicLong()
 private val transmitSuppressed = AtomicLong()
 private val uidReadFailures = AtomicLong()
 
-/** 已装状态：区分「已装」与「已生效」。 */
+/** Installation state: distinguishes "installed" from "effective". */
 private val installed = LinkedHashMap<String, Boolean>()
 
-/** 安装完成后的快照，供其它线程无锁读取。 */
+/** Snapshot taken after installation, for lock-free reads from other threads. */
 @Volatile
 private var installedSummary: String = "<not installed>"
 
@@ -80,7 +80,7 @@ private fun XposedModule.hookBinderGetDisplayIds(classLoader: ClassLoader) = run
             it.returnType == IntArray::class.java
     } ?: throw NoSuchMethodException("BinderService.getDisplayIds(Z)[I")
     hook(method).intercept { chain ->
-        // 必须在 proceed 之前取：方法内部会 clearCallingIdentity()。
+        // Must be read before proceed: the method calls clearCallingIdentity() internally.
         val callingUid = Binder.getCallingUid()
         val result = chain.proceed()
         val ids = result as? IntArray
@@ -175,8 +175,8 @@ private fun XposedModule.hookCallbackTransmitDisplayEvents(classLoader: ClassLoa
 }
 
 /**
- * 事件投递的 per-callback 入口：`deliverDisplayEvent` 对每个回调调用它。
- * 在此直接吞掉被隐藏 displayId 的事件，粒度最精确。
+ * Per-callback entry of event delivery: `deliverDisplayEvent` calls it for every callback.
+ * Events for hidden displayIds are swallowed right here, at the finest granularity.
  */
 private fun XposedModule.hookCallbackNotifyDisplayEvent(classLoader: ClassLoader) = runCatching {
     val clz = classLoader.loadClass("com.android.server.display.DisplayManagerService\$CallbackRecord")
@@ -211,8 +211,8 @@ private fun XposedModule.hookCallbackNotifyDisplayEvent(classLoader: ClassLoader
 }
 
 /**
- * 只读诊断：确认事件确实经过 DMS 的 `deliverDisplayEvent` 汇聚点。
- * 只在「displayId 出现在某条策略里」时打印，避免刷屏。
+ * Read-only diagnostics: confirms events really pass through DMS's `deliverDisplayEvent` convergence point.
+ * Only logs when "the displayId appears in some policy", to avoid flooding the log.
  */
 private fun XposedModule.hookDeliverDisplayEventDiag(classLoader: ClassLoader) = runCatching {
     val clz = classLoader.loadClass("com.android.server.display.DisplayManagerService")
@@ -247,7 +247,7 @@ private fun readCallbackUid(record: Any): Int? = runCatching {
     null
 }
 
-/** 供验收/自查：Hook 命中计数快照（区分「已装」与「已生效」）。 */
+/** For acceptance/self-check: snapshot of hook hit counters (distinguishes "installed" from "effective"). */
 fun visibilityHookStats(): String =
     "installed=$installedSummary " +
         "list(call=${listHits.get()},trim=${listTrimmed.get()}) " +

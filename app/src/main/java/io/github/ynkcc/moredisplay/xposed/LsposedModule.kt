@@ -14,19 +14,19 @@ import java.lang.reflect.Executable
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * LibXposed API 102 模块入口。
+ * LibXposed API 102 module entry (runs on Vector, and on LSPosed builds that support API 102).
  *
- * 作用域只需勾选 `android`（即 system_server 进程）：
- * 1. 在 system_server 内建起虚拟屏引擎，并 Hook `ContentProvider$Transport#call`
- *    给 App 提供 RPC 应答（见 [ProviderRpc]）；
- * 2. 放宽 `ActivityTaskSupervisor#isCallerAllowedToLaunchOnDisplay`，
- *    让应用可以把自己启动到我们托管的虚拟屏上；
- * 3. 按调用方 uid 过滤屏幕可见性（列表 / 点名 / 事件三处，见
- *    [installDisplayVisibilityHooks]），**不 Hook 目标 App**；
- * 4. 按调用方 uid 把录屏的 mirror 源改写到托管屏（见 [installRecordMirrorHooks]）；
- * 5. 按服务包名把无障碍手势改写到托管屏（见 [installAccessibilityRedirectHooks]）；
- * 6. 从最近任务查询结果中剔除托管屏任务（见 [hookRecentsGate]）——
- *    所有 ROM 的最近任务 UI 都收敛到 `ActivityTaskManagerService#getRecentTasks`。
+ * The scope only needs `system` (the system_server process, per the libxposed scope rules):
+ * 1. Builds the virtual display engine inside system_server and hooks `ContentProvider$Transport#call`
+ *    to answer the app's RPCs (see [ProviderRpc]);
+ * 2. Relaxes `ActivityTaskSupervisor#isCallerAllowedToLaunchOnDisplay`
+ *    so apps can launch themselves onto our managed virtual displays;
+ * 3. Filters display visibility by caller uid (list / by-id / events, see
+ *    [installDisplayVisibilityHooks]), **without hooking the target app**;
+ * 4. Rewrites the screen-recording mirror source to a managed display by caller uid (see [installRecordMirrorHooks]);
+ * 5. Rewrites accessibility gestures to a managed display by service package name (see [installAccessibilityRedirectHooks]);
+ * 6. Removes managed-display tasks from recent-task query results (see [hookRecentsGate]) --
+ *    every ROM's recents UI ultimately goes through `ActivityTaskManagerService#getRecentTasks`.
  */
 class LsposedModule : XposedModule() {
 
@@ -35,10 +35,10 @@ class LsposedModule : XposedModule() {
         private const val MODULE_PACKAGE = "io.github.ynkcc.moredisplay"
         private const val TRANSPORT_CLASS = "android.content.ContentProvider\$Transport"
 
-        /** Executable → 其中 `String` 类型形参的下标，避免在高频 provider 调用上重复反射。 */
+        /** Executable -> indexes of its `String` parameters, to avoid repeated reflection on hot provider calls. */
         private val stringArgIndexes = ConcurrentHashMap<Executable, IntArray>()
 
-        /** provider call 采样计数（ROM 差异诊断）。 */
+        /** Sampling counter for provider calls (ROM difference diagnostics). */
         private val transportCalls = java.util.concurrent.atomic.AtomicLong()
     }
 
@@ -64,11 +64,11 @@ class LsposedModule : XposedModule() {
     }
 
     /**
-     * 捕获 `ActivityManagerService.mUiContext`（Android 16 字段名为 `mUiContext`，
-     * 旧版本回退 `mContext`），用于初始化引擎。
+     * Captures `ActivityManagerService.mUiContext` (field name is `mUiContext` on Android 16,
+     * falling back to `mContext` on older versions) to initialize the engine.
      *
-     * 注意：本回调发生在 **原构造器体执行之前**，此时字段尚未赋值，
-     * 因此必须在 `chain.proceed()` 之后再读取，否则永远拿到 null。
+     * Note: this callback fires **before the original constructor body runs**, when the fields are not yet assigned,
+     * so they must be read after `chain.proceed()`, otherwise the result is always null.
      */
     private fun hookAmsContext(classLoader: ClassLoader) {
         runCatching {
@@ -104,15 +104,15 @@ class LsposedModule : XposedModule() {
     }.getOrNull()
 
     /**
-     * Hook 所有进程内 provider 调用的统一入口，多级备选（ROM 差异适配）：
+     * Hooks the common entry point of all in-process provider calls, with several fallbacks (ROM differences):
      *
-     * 1. `ContentProvider$Transport#call` —— AOSP binder 入口（POCO/AOSP 类 ROM 命中）；
-     * 2. `ContentProvider#call(String,String,String,Bundle)` —— Transport 内部转发的
-     *    `mInterface.call`（ColorOS 上 Transport.call 疑似被 AOT 内联导致 hook 落空，走这里）；
-     * 3. `ContentProvider#call(String,String,Bundle)` —— SDK 入口兜底（若子类未覆盖才有效）。
+     * 1. `ContentProvider$Transport#call` -- the AOSP binder entry (hit on POCO/AOSP-like ROMs);
+     * 2. `ContentProvider#call(String,String,String,Bundle)` -- the `mInterface.call` that Transport
+     *    forwards to internally (on ColorOS, Transport.call appears to be AOT-inlined so the hook misses; this catches it);
+     * 3. `ContentProvider#call(String,String,Bundle)` -- SDK entry as a last resort (only effective if the subclass doesn't override it).
      *
-     * 只有 method 等于 [ProviderRpc.METHOD] 的调用被接管，其余原样放行。
-     * 命中点用采样日志标记（`PROVIDER sample ... exe=...`），便于按 ROM 定位生效层。
+     * Only calls whose method equals [ProviderRpc.METHOD] are taken over; everything else passes through unchanged.
+     * Hit points are marked with sampled logs (`PROVIDER sample ... exe=...`) to identify the active layer per ROM.
      */
     private fun hookProviderRpc() {
         val targets = mutableListOf<java.lang.reflect.Method>()
@@ -141,7 +141,7 @@ class LsposedModule : XposedModule() {
                 }
                 val isRpc = indexes.any { chain.getArg(it) == ProviderRpc.METHOD }
                 if (!isRpc) {
-                    // 采样诊断：确认各层 hook 是否真的被触发（ROM 差异排查用）。
+                    // Sampled diagnostics: confirm each hook layer actually fires (for investigating ROM differences).
                     val n = transportCalls.incrementAndGet()
                     if (n <= 3 || n % 500 == 0L) {
                         val args = indexes.map { idx -> chain.getArg(idx) as? String }
@@ -173,11 +173,11 @@ class LsposedModule : XposedModule() {
     }
 
     /**
-     * 最近任务门禁：hook `ActivityTaskManagerService#getRecentTasks`（全部重载），
-     * after 回调按 displayId 剔除托管屏任务。
+     * Recents gate: hooks `ActivityTaskManagerService#getRecentTasks` (all overloads);
+     * the after-callback removes managed-display tasks by displayId.
      *
-     * 匹配规则：方法名 getRecentTasks + 返回 ParceledListSlice（不硬编码参数签名，
-     * ROM 在该入口增删参数也能装上）。目标方法与过滤逻辑见 [RecentsGate]。
+     * Matching rule: method name getRecentTasks + returns ParceledListSlice (the parameter signature is not hard-coded,
+     * so it still installs if a ROM adds or removes parameters on that entry). Target methods and filter logic: see [RecentsGate].
      */
     private fun hookRecentsGate(classLoader: ClassLoader) {
         runCatching {
@@ -225,7 +225,7 @@ class LsposedModule : XposedModule() {
 }
 
 /**
- * system_server 内的守护引擎持有者：进程内唯一、重复附着幂等。
+ * Holder of the daemon engine inside system_server: one per process, repeated attaches are idempotent.
  */
 object SystemDaemon {
     private const val TAG = "MoreDisplay_Lsposed"

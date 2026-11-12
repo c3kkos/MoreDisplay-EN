@@ -4,12 +4,12 @@ import io.github.ynkcc.moredisplay.App
 import io.github.ynkcc.moredisplay.transport.ProviderTransport
 
 /**
- * LSPosed 模块可用性探针。
+ * Xposed module availability probe (Vector / LSPosed).
  *
- * 判定为“可用”的两种情形：
- * 1. 当前进程被模块注入 —— 模块作用域包含本应用时由 `onPackageReady` 打标；
- * 2. system_server 内的守护引擎已就绪 —— 只需把 `android` 勾进作用域，
- *    这是本项目推荐（也是唯一必需）的作用域配置；通过一次 Ping RPC 实测。
+ * Two situations count as "available":
+ * 1. The current process was injected by the module -- flagged by `onPackageReady` when the module scope includes this app;
+ * 2. The daemon engine inside system_server is ready -- only `system` needs to be in the scope,
+ *    which is this project's recommended (and only required) scope; verified with a live Ping RPC.
  */
 object LsposedBridge {
 

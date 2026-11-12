@@ -9,56 +9,56 @@ import java.lang.reflect.Field
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * 需求 C：无障碍屏替换 —— 目标 App 的无障碍手势被改写到托管虚拟屏。
+ * Requirement C: accessibility display redirection -- the target app's accessibility gestures are rewritten to a managed virtual display.
  *
- * ## 落点（真机 services.jar dexdump 核实，Android 16 / SDK 36）
+ * ## Hook point (verified with dexdump on a real device's services.jar, Android 16 / SDK 36)
  * `AccessibilityServiceConnection.dispatchGesture(I, ParceledListSlice, I)V`
- * （继承自 `AbstractAccessibilityServiceConnection`，重写实现位于子类）。
- * 真机方法体（偏移 2f4054）核实调用链：
+ * (inherited from `AbstractAccessibilityServiceConnection`; the overriding implementation lives in the subclass).
+ * Call chain verified from the real device's method body (offset 2f4054):
  * ```
  * dispatchGesture(sequence, steps, displayId)
  *   -> SystemSupport.getMotionEventInjectorForDisplayLocked(displayId)
  *   -> MotionEventInjector.injectEvents(list, client, sequence, displayId, isAccessibilityTool)
  * ```
- * 第三参就是目标 displayId，一路传到手势注入器；在此改写即可让整条注入链落到托管屏。
+ * The third argument is the target displayId, passed all the way to the gesture injector; rewriting it here makes the whole injection chain land on the managed display.
  *
- * 客户端侧（framework）确认：`AccessibilityService.dispatchGesture(...)` 把
- * `gesture.getDisplayId()` 原样传给 binder；`GestureDescription.Builder.mDisplayId`
- * 默认值是 `Display.DEFAULT_DISPLAY(0)`。也就是说常规自动点击/滑动脚本如果不显式
- * `setDisplayId`，手势都落在默认屏 —— 这正是要替换的对象。
+ * Client side (framework) confirmed: `AccessibilityService.dispatchGesture(...)` passes
+ * `gesture.getDisplayId()` to the binder unchanged; the default of `GestureDescription.Builder.mDisplayId`
+ * is `Display.DEFAULT_DISPLAY(0)`. So typical auto-click/swipe scripts that don't call
+ * `setDisplayId` explicitly send their gestures to the default display -- exactly what needs to be replaced.
  *
- * ## 为什么按「包名 + mUserId」匹配而不是 uid
- * 无障碍连接对象（`AbstractAccessibilityServiceConnection`）上没有 uid 字段，
- * 只有 `mComponentName` 和 `mUserId`（真机 dexdump 核实实例字段表）。策略条目的
- * uid 本身编码了用户（`uid / 100000` == mUserId），所以按「包名 + 服务所属用户」
- * 匹配即可精确对位，也免去 `PackageManager.getPackageUidAsUser` 的每次解析。
- * 多用户下同一包名会为每个用户各装一份（uid 不同），仅按包名匹配会有歧义，
- * 因此 mUserId 是必需维度。
+ * ## Why match by "package name + mUserId" instead of uid
+ * The accessibility connection object (`AbstractAccessibilityServiceConnection`) has no uid field,
+ * only `mComponentName` and `mUserId` (verified against the instance field table via dexdump on a real device). A policy entry's
+ * uid already encodes the user (`uid / 100000` == mUserId), so matching by "package name + owning user of the service"
+ * is precise, and also avoids resolving `PackageManager.getPackageUidAsUser` every time.
+ * On multi-user setups the same package is installed once per user (with different uids), so matching by package name alone is ambiguous;
+ * hence mUserId is a required dimension.
  *
- * ## 只在「目标默认屏」时改写（避免误伤）
- * 同时满足才改写：
- * 1. 连接的服务包名在策略里配了 `operatedDisplayId`；
- * 2. 手势目标 displayId == 0（默认屏；服务显式指向其它屏的一律放行）；
- * 3. 目标 displayId 是本守护引擎托管的虚拟屏（`SystemDaemon.isManagedDisplay`）。
+ * ## Only rewrites when targeting the default display (avoid collateral damage)
+ * Rewritten only when all of the following hold:
+ * 1. The connected service's package has `operatedDisplayId` configured in the policy;
+ * 2. The gesture's target displayId == 0 (the default display; services explicitly targeting another display are passed through);
+ * 3. The target displayId is a virtual display managed by this daemon engine (`SystemDaemon.isManagedDisplay`).
  *
- * ## 默认放行
- * 没配 `operatedDisplayId` / 包名不匹配 / 任一条件不满足 → 原样 `proceed()`，
- * 行为与未装模块一致。`performGlobalAction` 等系统级动作不在此链路，不受影响。
+ * ## Pass-through by default
+ * No `operatedDisplayId` configured / package mismatch / any condition not met -> plain `proceed()`,
+ * behaving exactly as without the module. System-level actions such as `performGlobalAction` are not on this path and are unaffected.
  */
 private const val TAG = "MoreDisplay_A11y"
 
-/** `Display.DEFAULT_DISPLAY`。 */
+/** `Display.DEFAULT_DISPLAY`. */
 private const val DEFAULT_DISPLAY_ID = 0
 
 private val gestureHits = AtomicLong()
 private val redirectApplied = AtomicLong()
 private val redirectSkipped = AtomicLong()
 
-/** mComponentName 字段（声明在抽象父类 `AbstractAccessibilityServiceConnection` 上）。 */
+/** mComponentName field (declared on the abstract parent `AbstractAccessibilityServiceConnection`). */
 @Volatile
 private var componentField: Field? = null
 
-/** mUserId 字段（`AccessibilityServiceConnection` 上，服务所属用户）。 */
+/** mUserId field (on `AccessibilityServiceConnection`; the user that owns the service). */
 @Volatile
 private var userIdField: Field? = null
 
@@ -115,14 +115,14 @@ fun XposedModule.installAccessibilityRedirectHooks(classLoader: ClassLoader) {
 }
 
 /**
- * 返回 true 表示已用改写后的参数完成调用（外层不得再 proceed）。
+ * Returns true if the call was completed with the rewritten arguments (the caller must not proceed again).
  */
 private fun tryRedirectGesture(chain: XposedInterface.Chain, displayId: Int): Boolean {
     val connection = chain.thisObject ?: return false
     val field = componentField ?: return false
     val componentName = field.get(connection) as? ComponentName ?: return false
     val packageName = componentName.packageName
-    // 服务所属用户：多用户下同一包名各用户各一份（uid 不同），必须带 userId 消歧。
+    // Owning user of the service: on multi-user setups each user has its own copy of the package (different uid), so userId is needed to disambiguate.
     val userId = userIdField?.getInt(connection) ?: 0
 
     val target = DisplayPolicyRegistry.operatedDisplayIdForPackage(packageName, userId)
@@ -142,7 +142,7 @@ private fun tryRedirectGesture(chain: XposedInterface.Chain, displayId: Int): Bo
         return false
     }
 
-    // 用改写后的参数继续原流程：injector 选择与 injectEvents 全都用这个 displayId。
+    // Continue the original flow with the rewritten arguments: injector selection and injectEvents all use this displayId.
     val args = chain.args.toTypedArray()
     args[2] = target
     redirectApplied.incrementAndGet()
@@ -155,7 +155,7 @@ private fun tryRedirectGesture(chain: XposedInterface.Chain, displayId: Int): Bo
     return true
 }
 
-/** 供验收/自查：需求 C 的 Hook 命中计数（区分「已装」与「已生效」）。 */
+/** For acceptance/self-check: requirement C hook hit counters (distinguishes "installed" from "effective"). */
 fun accessibilityHookStats(): String =
     "a11y(installed=$accessibilityHookInstalled call=${gestureHits.get()} " +
         "applied=${redirectApplied.get()} skip=${redirectSkipped.get()})"
