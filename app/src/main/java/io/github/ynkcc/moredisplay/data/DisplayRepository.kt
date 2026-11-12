@@ -114,7 +114,7 @@ class DisplayRepository : IDisplayRepository {
         }
     }
 
-     * Connects every provider that is "available but not yet connected"; a single failure is only recorded and doesn't interrupt.
+    /** Connects every provider that is "available but not yet connected"; a single failure is only recorded and doesn't interrupt. */
     private suspend fun connectMissingSlots(): List<String> {
         val errors = mutableListOf<String>()
         for (provider in DispatchCenter.activeProviders()) {
