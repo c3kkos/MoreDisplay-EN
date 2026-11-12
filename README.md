@@ -1,5 +1,9 @@
 # MoreDisplay (English edition)
 
+<p align="center">
+  <img src=".github/logo.svg" alt="MoreDisplay logo: a rainbow TV screen with the letters MD" width="220">
+</p>
+
 > **All credit goes to [ynkcc](https://github.com/ynkcc), the original author of MoreDisplay.**
 > Original project: **https://github.com/ynkcc/MoreDisplay**
 > The design, the hooks and every feature are his work. This fork only translates the app and the
