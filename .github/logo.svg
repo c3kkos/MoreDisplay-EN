@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>MoreDisplay logo</title>
+  <defs>
+    <clipPath id="screen"><rect x="88" y="150" width="336" height="236" rx="30"/></clipPath>
+  </defs>
+  <!-- antennas -->
+  <g stroke="#2b2d42" stroke-width="12" stroke-linecap="round">
+    <line x1="256" y1="122" x2="176" y2="46"/>
+    <line x1="256" y1="122" x2="340" y2="40"/>
+  </g>
+  <circle cx="176" cy="46" r="16" fill="#ff4d6d" stroke="#2b2d42" stroke-width="8"/>
+  <circle cx="340" cy="40" r="16" fill="#4cc9f0" stroke="#2b2d42" stroke-width="8"/>
+  <!-- feet -->
+  <path d="M136 412 L160 412 L150 456 L120 456 Z" fill="#2b2d42"/>
+  <path d="M352 412 L376 412 L392 456 L362 456 Z" fill="#2b2d42"/>
+  <!-- body -->
+  <rect x="56" y="118" width="400" height="300" rx="52" fill="#2b2d42"/>
+  <!-- rainbow screen -->
+  <g clip-path="url(#screen)">
+    <rect x="88" y="150" width="336" height="40" fill="#ff4d6d"/>
+    <rect x="88" y="189" width="336" height="40" fill="#ff9f1c"/>
+    <rect x="88" y="228" width="336" height="40" fill="#ffd60a"/>
+    <rect x="88" y="267" width="336" height="40" fill="#52d17c"/>
+    <rect x="88" y="306" width="336" height="40" fill="#4cc9f0"/>
+    <rect x="88" y="345" width="336" height="41" fill="#9b5de5"/>
+    <ellipse cx="170" cy="182" rx="110" ry="46" fill="#ffffff" opacity="0.18"/>
+  </g>
+  <!-- MD letters: shadow, then outlined white -->
+  <g transform="translate(6 7)" fill="#2b2d42" opacity="0.35">
+    <path d="M116 335 V205 H152 L181 255 L210 205 H246 V335 H214 V262 L181 312 L148 262 V335 Z"/>
+    <path fill-rule="evenodd" d="M264 205 H320 A76 65 0 0 1 320 335 H264 Z M296 237 H318 A44 33 0 0 1 318 303 H296 Z"/>
+  </g>
+  <g fill="#ffffff" stroke="#2b2d42" stroke-width="10" stroke-linejoin="round" paint-order="stroke">
+    <path d="M116 335 V205 H152 L181 255 L210 205 H246 V335 H214 V262 L181 312 L148 262 V335 Z"/>
+    <path fill-rule="evenodd" d="M264 205 H320 A76 65 0 0 1 320 335 H264 Z M296 237 H318 A44 33 0 0 1 318 303 H296 Z"/>
+  </g>
+</svg>
