@@ -44,24 +44,30 @@ No root? See [Shizuku mode](#no-root-shizuku-mode) below; it has fewer features.
 
 ## Download
 
-Builds are produced automatically by GitHub Actions on every change:
+### ➜ [Download the latest release](../../releases/latest)
 
-1. Open the **[Actions tab](../../actions/workflows/ci.yml)** of this repository.
-2. Click the most recent run with a green check mark.
-3. Scroll down to **Artifacts** and download **`moredisplay-debug`** (you must be logged in to GitHub).
-4. Unzip it. Inside you will find:
-   - `app-debug.apk`: **the MoreDisplay app. This is the one you need.**
-   - `probe-debug.apk`: a small test app for developers. You can ignore it.
+On the release page, under **Assets**, download **`MoreDisplay-<version>.apk`**.
+That is the app (the Vector module itself). No GitHub account needed.
+
+(`MoreDisplayProbe-<version>.apk` is a small test app for developers. You can ignore it.)
 
 > **Coming from the original MoreDisplay?** This build is signed with a different key, so uninstall
 > the original app first, then install this one.
+
+<details>
+<summary>Want the newest development build instead?</summary>
+
+Every change also produces a test build in the **[Actions tab](../../actions/workflows/ci.yml)**:
+open the latest run with a green check mark, scroll to **Artifacts** and download
+**`moredisplay-debug`** (GitHub login required, kept for 90 days). Inside, `app-debug.apk` is the app.
+</details>
 
 ---
 
 ## Installation (Vector, recommended)
 
 1. Install **Vector** and reboot.
-2. Install **`app-debug.apk`**.
+2. Install the **`MoreDisplay-<version>.apk`** you downloaded.
 3. Open the **Vector manager**, go to **Modules** and enable **MoreDisplay**.
 4. In the module's scope, tick **System Framework** only. Nothing else is needed.
 5. **Reboot** your phone.
