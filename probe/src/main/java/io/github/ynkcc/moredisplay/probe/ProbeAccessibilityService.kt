@@ -12,22 +12,22 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 
 /**
- * 需求 C 的「探测无障碍服务」——一个**普通 App** 的无障碍服务（不被模块注入）。
+ * The "probe accessibility service" for requirement C -- an accessibility service of a **normal app** (not injected by the module).
  *
- * 只做一件事：按 adb 广播指令派发手势，把派发目标与结果打到 logcat，
- * 供对照 system_server 侧 `MoreDisplay_A11y` 的改写日志。
+ * It does just one thing: dispatches gestures on adb broadcast commands and logs the dispatch target and result to logcat,
+ * for comparison with the rewrite logs of `MoreDisplay_A11y` on the system_server side.
  *
- * 用法（adb）：
+ * Usage (adb):
  * ```
- * # 1. 开启服务
+ * # 1. Enable the service
  * adb shell settings put secure enabled_accessibility_services \
  *     io.github.ynkcc.moredisplay.probe/io.github.ynkcc.moredisplay.probe.ProbeAccessibilityService
  * adb shell settings put secure accessibility_enabled 1
  *
- * # 2. 派发手势（默认走 GestureDescription 默认 displayId=0）
+ * # 2. Dispatch a gesture (uses the GestureDescription default displayId=0)
  * adb shell am broadcast -a io.github.ynkcc.moredisplay.probe.GESTURE --ef x 540 --ef y 960
  *
- * # 3. 显式指定目标屏（对照：hook 不应改写显式指向非默认屏的手势）
+ * # 3. Explicitly specify the target display (control: the hook must not rewrite gestures explicitly targeting a non-default display)
  * adb shell am broadcast -a io.github.ynkcc.moredisplay.probe.GESTURE \
  *     --ef x 540 --ef y 960 --ei display 0
  *
@@ -60,7 +60,7 @@ class ProbeAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        // 广播来自 adb shell（shell uid），必须导出；Android 14+ 要求显式指定标志。
+        // The broadcast comes from adb shell (shell uid), so it must be exported; Android 14+ requires the flag to be specified explicitly.
         registerReceiver(receiver, IntentFilter(ACTION_GESTURE), Context.RECEIVER_EXPORTED)
         Log.i(TAG, "probe accessibility service connected pid=${android.os.Process.myPid()}")
     }
@@ -99,7 +99,7 @@ class ProbeAccessibilityService : AccessibilityService() {
                     Log.w(
                         TAG,
                         "GESTURE cancelled display=${gestureDescription?.displayId} " +
-                            "(injector 不存在或被系统拒绝)"
+                            "(injector missing or rejected by the system)"
                     )
                 }
             },
