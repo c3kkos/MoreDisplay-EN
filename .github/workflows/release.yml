@@ -4,6 +4,16 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create (e.g. v1.1-en)'
+        required: true
+        default: 'v1.1-en'
+
+# Tag pushes use the pushed tag; manual runs use the `tag` input
+# (GITHUB_REF_NAME would be the branch name, e.g. `main`, on a manual run).
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
 permissions:
   contents: write
@@ -60,7 +70,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME:-manual-${GITHUB_RUN_ID}}"
+          TAG="$RELEASE_TAG"
           gh release create "$TAG" \
             --title "${{ steps.ver.outputs.version_name }}" \
             --generate-notes \
@@ -97,7 +107,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME:-manual-${GITHUB_RUN_ID}}"
+          TAG="$RELEASE_TAG"
           gh release download "$TAG" --dir out --pattern '*.apk'
           # The module repository only carries the module itself; probe is an acceptance-test tool and is not distributed with it.
           rm -f out/MoreDisplayProbe-*.apk
