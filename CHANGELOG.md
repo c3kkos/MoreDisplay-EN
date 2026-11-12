@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2 (versionCode 3, English edition)
+
+### Fixed
+- **Creating a display failed on Android 10, 12, 12L and 13** with "Wrong number of arguments; expected 6, got 5".
+  The Xposed engine called the hidden `DisplayManagerGlobal#createVirtualDisplay` with a fixed 5 arguments, which
+  only matches Android 11 and 14+. Arguments are now built from the method's actual parameter list on every
+  version, and Android 10 uses its older `createVirtualDisplay(name, width, height, ...)` form.
+
+### Added
+- **The device's built-in screen (display #0) is listed as the default managed display**: first on the Displays
+  page (with its real resolution, density, name and refresh rate), as a locked always-visible chip in the policy
+  editor, and first in `adb ... --es action list`. It can't be removed or hidden from apps.
+
 ## Unreleased (English / Vector fork)
 
 ### Changed

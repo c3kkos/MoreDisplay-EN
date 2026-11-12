@@ -69,18 +69,9 @@ class SystemDisplayEngine(
 
         val global = Class.forName(GLOBAL_CLASS).getMethod("getInstance").invoke(null)
             ?: throw IllegalStateException("DisplayManagerGlobal unavailable (is the display service up?)")
-        val create = global.javaClass.methods.firstOrNull {
-            it.name == "createVirtualDisplay" &&
-                it.parameterTypes.firstOrNull() == Context::class.java &&
-                it.returnType == VirtualDisplay::class.java
-        } ?: throw NoSuchMethodException("createVirtualDisplay(Context, ...): VirtualDisplay not found")
 
         val sink = newSink(spec.width, spec.height)
-        val config = VirtualDisplayConfig.Builder(spec.name, spec.width, spec.height, spec.densityDpi)
-            .setFlags(flags)
-            .setSurface(sink.surface)
-            .build()
-        val vd = runCatching { create.invoke(global, systemContext, null, config, null, null) as? VirtualDisplay }
+        val vd = runCatching { invokeCreateVirtualDisplay(global, spec, flags, sink.surface) }
             .getOrElse {
                 runCatching { sink.reader.close() }
                 throw it
@@ -101,6 +92,98 @@ class SystemDisplayEngine(
                 "flags=0x${Integer.toHexString(flags)} owner=${systemContext.packageName} (with output sink)"
         )
         return info
+    }
+
+    /**
+     * Calls the hidden `DisplayManagerGlobal#createVirtualDisplay`, whose parameter list differs between Android versions:
+     * - Android 11 (API 30): `(Context, MediaProjection, VirtualDisplayConfig, Callback, Handler)` -- 5 parameters;
+     * - Android 12/12L (API 31-32): `(Context, MediaProjection, VirtualDisplayConfig, Callback, Handler, Context windowContext)` -- 6;
+     * - Android 13 (API 33): `(Context, MediaProjection, VirtualDisplayConfig, Callback, Executor, Context windowContext)` -- 6;
+     * - Android 14+ (API 34+): `(Context, MediaProjection, VirtualDisplayConfig, Callback, Executor)` -- 5;
+     * - Android 10 (API 29): no VirtualDisplayConfig yet, see [invokeLegacyCreate].
+     *
+     * Instead of hard-coding one argument count (which fails with "Wrong number of arguments" on the other versions),
+     * the arguments are built from the actual parameter list: the first `Context` is the system context, the
+     * `VirtualDisplayConfig` is the config, and everything else (projection, callback, handler/executor, window context)
+     * is null -- exactly what the old fixed call passed.
+     */
+    private fun invokeCreateVirtualDisplay(global: Any, spec: DisplaySpec, flags: Int, surface: Surface): VirtualDisplay? {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+            return invokeLegacyCreate(global, spec, flags, surface)
+        }
+        val config = buildConfig(spec, flags, surface)
+        val create = global.javaClass.methods
+            .filter {
+                it.name == "createVirtualDisplay" &&
+                    it.parameterTypes.firstOrNull() == Context::class.java &&
+                    it.returnType == VirtualDisplay::class.java &&
+                    VirtualDisplayConfig::class.java in it.parameterTypes
+            }
+            .minByOrNull { it.parameterCount }
+            ?: throw NoSuchMethodException("createVirtualDisplay(Context, ..., VirtualDisplayConfig, ...): VirtualDisplay not found")
+
+        var contextFilled = false
+        val args = create.parameterTypes.map { type ->
+            when {
+                type == Context::class.java && !contextFilled -> { contextFilled = true; systemContext }
+                type == VirtualDisplayConfig::class.java -> config
+                else -> defaultValue(type)
+            }
+        }.toTypedArray()
+        Log.d(TAG, "createVirtualDisplay with ${create.parameterCount} parameters: ${create.parameterTypes.joinToString { it.simpleName }}")
+        return create.invoke(global, *args) as? VirtualDisplay
+    }
+
+    @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.R)
+    private fun buildConfig(spec: DisplaySpec, flags: Int, surface: Surface): VirtualDisplayConfig =
+        VirtualDisplayConfig.Builder(spec.name, spec.width, spec.height, spec.densityDpi)
+            .setFlags(flags)
+            .setSurface(surface)
+            .build()
+
+    /**
+     * Android 10 (API 29): `createVirtualDisplay(Context, MediaProjection, String name, int width, int height,
+     * int densityDpi, Surface, int flags, Callback, Handler, String uniqueId)`. Arguments are matched by type and order.
+     */
+    private fun invokeLegacyCreate(global: Any, spec: DisplaySpec, flags: Int, surface: Surface): VirtualDisplay? {
+        val create = global.javaClass.methods
+            .filter {
+                it.name == "createVirtualDisplay" &&
+                    it.parameterTypes.firstOrNull() == Context::class.java &&
+                    it.returnType == VirtualDisplay::class.java &&
+                    String::class.java in it.parameterTypes &&
+                    Surface::class.java in it.parameterTypes
+            }
+            .minByOrNull { it.parameterCount }
+            ?: throw NoSuchMethodException("legacy createVirtualDisplay(Context, ..., String, int...): VirtualDisplay not found")
+
+        val ints = ArrayDeque(listOf(spec.width, spec.height, spec.densityDpi, flags))
+        val strings = ArrayDeque(listOf<String?>(spec.name))
+        var contextFilled = false
+        val args = create.parameterTypes.map { type ->
+            when {
+                type == Context::class.java && !contextFilled -> { contextFilled = true; systemContext }
+                type == Int::class.javaPrimitiveType -> ints.removeFirstOrNull() ?: 0
+                type == String::class.java -> strings.removeFirstOrNull()
+                type == Surface::class.java -> surface
+                else -> defaultValue(type)
+            }
+        }.toTypedArray()
+        Log.d(TAG, "legacy createVirtualDisplay with ${create.parameterCount} parameters")
+        return create.invoke(global, *args) as? VirtualDisplay
+    }
+
+    /** null for objects, zero/false for primitives (reflection can't pass null to a primitive parameter). */
+    private fun defaultValue(type: Class<*>): Any? = when (type) {
+        Boolean::class.javaPrimitiveType -> false
+        Int::class.javaPrimitiveType -> 0
+        Long::class.javaPrimitiveType -> 0L
+        Float::class.javaPrimitiveType -> 0f
+        Double::class.javaPrimitiveType -> 0.0
+        Short::class.javaPrimitiveType -> 0.toShort()
+        Byte::class.javaPrimitiveType -> 0.toByte()
+        Char::class.javaPrimitiveType -> 0.toChar()
+        else -> null
     }
 
     /**

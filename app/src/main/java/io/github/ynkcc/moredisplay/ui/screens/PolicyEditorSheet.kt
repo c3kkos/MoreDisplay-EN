@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.ynkcc.moredisplay.ui.BuiltInDisplay
 import io.github.ynkcc.moredisplay.core.DisplayInfo
 import io.github.ynkcc.moredisplay.core.DisplayPolicy
 import io.github.ynkcc.moredisplay.core.Visibility
@@ -181,26 +182,34 @@ internal fun PolicyEditorSheet(
             // -- Applicable displays (meaningless for ALL, so hidden) --
             if (visibility != Visibility.ALL) {
                 Text("Applicable displays", style = MaterialTheme.typography.titleSmall)
-                if (displayIds.isEmpty()) {
-                    Text(
-                        "No managed displays yet; create one on the Displays page first",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // The built-in screen is the default managed display: always visible, so locked.
+                    FilterChip(
+                        selected = visibility == Visibility.ONLY,
+                        onClick = {},
+                        enabled = false,
+                        label = { Text("#${BuiltInDisplay.ID} Built-in") }
                     )
-                } else {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        displayIds.forEach { id ->
-                            FilterChip(
-                                selected = id in selectedIds,
-                                onClick = {
-                                    selectedIds =
-                                        if (id in selectedIds) selectedIds - id else selectedIds + id
-                                },
-                                label = { Text(displayLabel(displays, id)) }
-                            )
-                        }
+                    displayIds.filter { it != BuiltInDisplay.ID }.forEach { id ->
+                        FilterChip(
+                            selected = id in selectedIds,
+                            onClick = {
+                                selectedIds =
+                                    if (id in selectedIds) selectedIds - id else selectedIds + id
+                            },
+                            label = { Text(displayLabel(displays, id)) }
+                        )
                     }
                 }
+                Text(
+                    if (displayIds.none { it != BuiltInDisplay.ID }) {
+                        "The built-in screen is always visible to every app. Create virtual displays on the Displays page to add more."
+                    } else {
+                        "The built-in screen is always visible to every app."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             // -- Recording redirect --
@@ -288,7 +297,7 @@ internal fun PolicyEditorSheet(
     }
 }
 
-/** Single-choice redirect chips: "No redirect" + each managed display. */
+/** Single-choice redirect chips: the built-in screen (= no redirect) + each managed virtual display. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RedirectChips(
@@ -301,9 +310,9 @@ private fun RedirectChips(
         FilterChip(
             selected = selected == -1,
             onClick = { onSelect(-1) },
-            label = { Text("No redirect") }
+            label = { Text("#${BuiltInDisplay.ID} Built-in (no redirect)") }
         )
-        displayIds.forEach { id ->
+        displayIds.filter { it != BuiltInDisplay.ID }.forEach { id ->
             FilterChip(
                 selected = selected == id,
                 onClick = { onSelect(id) },

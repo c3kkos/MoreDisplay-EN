@@ -40,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -49,6 +50,7 @@ import kotlinx.coroutines.isActive
 import io.github.ynkcc.moredisplay.core.DisplayInfo
 import io.github.ynkcc.moredisplay.core.Privilege
 import io.github.ynkcc.moredisplay.core.VirtualDisplayFlags
+import io.github.ynkcc.moredisplay.ui.BuiltInDisplay
 import io.github.ynkcc.moredisplay.ui.CreateHistoryStore
 import io.github.ynkcc.moredisplay.ui.viewmodel.DisplaysViewModel
 import io.github.ynkcc.moredisplay.ui.viewmodel.label
@@ -87,32 +89,40 @@ fun DisplaysScreen(
 
     val connectedChannels = workModes.keys.sortedByDescending { it.priority() }
 
+    // The device's own screen (display 0) is always listed first as the default managed display.
+    val context = LocalContext.current
+    val builtIn = remember { BuiltInDisplay.query(context) }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        if (connectedChannels.isEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text("No channel connected", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Connect on the Home page first; Shizuku and Xposed (Vector/LSPosed) each manage their own virtual displays.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            item(key = "builtin-header") { BuiltInSectionHeader() }
+            item(key = "builtin") { BuiltInDisplayCard(builtIn) }
+            item(key = "builtin-spacer") { Spacer(Modifier.height(4.dp)) }
+
+            if (connectedChannels.isEmpty()) {
+                item(key = "no-channel") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("No channel connected", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Connect on the Home page to create virtual displays; Shizuku and Xposed (Vector/LSPosed) each manage their own.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
                 connectedChannels.forEach { channel ->
                     item(key = "header-${channel.name}") {
                         ChannelSectionHeader(
@@ -159,6 +169,64 @@ fun DisplaysScreen(
                     CreateHistoryStore.record(w, h, dpi)
                     vm.createDisplay(channel, w, h, dpi, name, flags)
                 }
+            )
+        }
+    }
+}
+
+/** Section header for the device's built-in screen. */
+@Composable
+private fun BuiltInSectionHeader() {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Built-in", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "  1 display (default)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/** The device's own screen: always present, can't be removed and is never hidden from apps. */
+@Composable
+private fun BuiltInDisplayCard(builtIn: BuiltInDisplay?) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Display #${builtIn?.displayId ?: BuiltInDisplay.ID}",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(Modifier.weight(1f))
+                AssistChip(onClick = {}, enabled = false, label = { Text("Built-in · default") })
+            }
+            if (builtIn != null) {
+                Text(
+                    builtIn.sizeLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontFamily = FontFamily.Monospace
+                )
+                Text(
+                    "name=${builtIn.name}  ${"%.0f".format(builtIn.refreshRate)}Hz",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    "Device screen details unavailable",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                "The device's own screen. Always managed; it can't be removed or hidden from apps.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
