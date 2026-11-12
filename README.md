@@ -97,11 +97,15 @@ If it says *"No access method detected"*, check that the module is enabled in Ve
 
 ### 2. Displays
 
-Your virtual screens.
+Your screens. The **Built-in** section always comes first: it shows your device's own screen
+(display `#0`, e.g. your tablet's panel) with its resolution and density. It is the default managed
+display, so it can't be removed.
+
+To add a virtual screen:
 
 1. Tap **+** next to a channel.
 2. Fill in **Width**, **Height** and **Density (dpi)**, for example `1080` × `1920` @ `320`.
-3. Optionally give it a **Name** and **flags** (leave the flags empty if unsure).
+3. Optionally give it a **Name**. Keep the pre-filled **flags** value if unsure.
 4. Tap **Create**. The new screen appears in the list with its **display ID** (for example `#2`).
    You will need this number later.
 
@@ -118,7 +122,9 @@ Rules that decide what a specific app can see or where it acts.
    - **All**: no restriction (default)
    - **Whitelist only**: the app sees only the screens you tick
    - **Blacklist**: the app cannot see the screens you tick
-4. **Recording redirect** (optional): pick a virtual screen. When this app records the screen,
+
+   The built-in screen (`#0`) is shown as a locked chip: it is always visible to every app.
+4. **Recording redirect** (optional): pick a virtual screen (`#0 Built-in` means no redirect). When this app records the screen,
    it will record that virtual screen instead.
 5. **Accessibility redirect** (optional): pick a virtual screen. Taps and swipes performed by this
    app's accessibility service will land on that virtual screen.
@@ -158,7 +164,7 @@ phone and in `adb logcat -s MoreDisplay_Cmd`.
 adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
   --es action create --ei width 1280 --ei height 720 --ei dpi 240 --ei flags 1
 
-# List / remove virtual screens
+# List screens (the built-in screen comes first) / remove a virtual screen
 adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action list
 adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action remove --ei display_id 2
 
