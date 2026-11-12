@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# 把模块元数据与已签名 APK 推到 LSPosed 官方收录仓库 Xposed-Modules-Repo/<package>。
+# Push module metadata and the signed APK to the official module repository Xposed-Modules-Repo/<package>.
 #
-# 用法：
+# Usage:
 #   ./scripts/publish-lsposed.sh <tag> <title> <notes-file> <apk> [<apk>...]
-#   # tag 必须是 `<versionCode>-<versionName>`，例如 1-1.0
+#   # the tag must be `<versionCode>-<versionName>`, e.g. 1-1.0
 #
-# 需要的环境：
-#   GH_TOKEN        具备 Xposed-Modules-Repo/<package> 写权限的 PAT（CI 里用 secret 注入）
-#   LSPOSED_REPO    可选，默认 Xposed-Modules-Repo/io.github.ynkcc.moredisplay
+# Required environment:
+#   GH_TOKEN        PAT with write access to Xposed-Modules-Repo/<package> (injected as a secret in CI)
+#   LSPOSED_REPO    optional, defaults to Xposed-Modules-Repo/io.github.ynkcc.moredisplay
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -22,7 +22,7 @@ APKS=("$@")
 REPO="${LSPOSED_REPO:-Xposed-Modules-Repo/io.github.ynkcc.moredisplay}"
 : "${GH_TOKEN:?GH_TOKEN is not set}"
 
-# 写入（或更新）仓库里的元数据文件。LSPosed 用 SUMMARY 做首页摘要、README.md 做详情页。
+# Write (or update) the metadata files in the repository. The manager uses SUMMARY as the list summary and README.md as the detail page.
 put_file() {
     local path="$1" src="$2"
     local sha content
@@ -44,7 +44,7 @@ put_file() {
 put_file SUMMARY dist/SUMMARY
 put_file README.md dist/README.md
 
-# 收录仓库靠 release + 附带的 apk 出包；tag 必须是 <versionCode>-<versionName>。
+# The module repository ships packages via releases with an attached apk; the tag must be <versionCode>-<versionName>.
 if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
     gh release upload "$TAG" --repo "$REPO" --clobber "${APKS[@]}"
     echo "uploaded to existing release $TAG"

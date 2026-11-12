@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# 本地构建已签名的 release APK。
+# Build a signed release APK locally.
 #
-# 用法：
-#   ./scripts/build-release.sh                     # 只构建 :app
-#   ./scripts/build-release.sh --all               # 同时构建 :probe（验收用探测程序）
+# Usage:
+#   ./scripts/build-release.sh                     # build :app only
+#   ./scripts/build-release.sh --all               # also build :probe (acceptance probe)
 #   ANDROID_SIGNING_ENV=/path/to/env ./scripts/build-release.sh
 #
-# 签名信息来自一个 shell 片段文件，默认 ~/.config/zsh/secret/android-signing.zsh，
-# 该文件只 export 四个变量，不入库：
+# Signing info comes from a shell snippet file, by default ~/.config/zsh/secret/android-signing.zsh,
+# which only exports four variables and is never committed:
 #   RELEASE_STORE_PASSWORD / RELEASE_KEY_PASSWORD / RELEASE_KEY_ALIAS / RELEASE_KEYSTORE_BASE64
 set -euo pipefail
 
