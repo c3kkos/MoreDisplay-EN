@@ -11,7 +11,14 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.util.Rational
+import android.os.ParcelFileDescriptor
 import android.view.Gravity
+import android.view.MotionEvent
+import androidx.activity.OnBackPressedCallback
+import java.io.BufferedOutputStream
+import java.io.DataOutputStream
+import java.io.FileOutputStream
+import java.util.concurrent.Executors
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
@@ -22,6 +29,8 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import io.github.ynkcc.moredisplay.App
+import io.github.ynkcc.moredisplay.core.TouchCodec
+import io.github.ynkcc.moredisplay.core.TouchEvent
 import io.github.ynkcc.moredisplay.cast.CastController
 import io.github.ynkcc.moredisplay.cast.FrameHub
 import io.github.ynkcc.moredisplay.core.ConnectionStatus
@@ -67,13 +76,35 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
     private lateinit var frame: AspectFrameLayout
     private lateinit var surfaceView: SurfaceView
     private lateinit var controls: LinearLayout
+    private lateinit var backButton: Button
+    private lateinit var dots: TouchDotsView
+
+    // ---- Touch control (full-screen viewer only; a PiP window can't receive touches) ----
+    private val touchWriter = Executors.newSingleThreadExecutor { r -> Thread(r, "MoreDisplay-touch-out") }
+
+    /** The touch pipe's write end and stream, while a touch channel is open. */
+    private var touchPipe: ParcelFileDescriptor? = null
+    private var touchOut: DataOutputStream? = null
+    private var touchFor: Int? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         surfaceView = SurfaceView(this).apply { holder.addCallback(this@ViewerActivity) }
-        frame = AspectFrameLayout(this).apply { addView(surfaceView) }
+        dots = TouchDotsView(this)
+        frame = AspectFrameLayout(this).apply {
+            addView(surfaceView)
+            addView(dots)
+            setOnTouchListener { view, event -> onPictureTouch(view, event) }
+        }
+        backButton = Button(this).apply {
+            text = "Back"
+            contentDescription = "Back, in the app on the virtual display"
+            visibility = View.GONE
+            setOnClickListener { sendTouch(TouchEvent.Back) }
+        }
         controls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            addView(backButton)
             addView(Button(context).apply {
                 text = "Picture-in-picture"
                 setOnClickListener { enterPip() }
@@ -94,6 +125,17 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
             ).apply { setMargins(24, 24, 24, 24) })
         }
         setContentView(root)
+        // The tablet's own Back is always yours: it shrinks the viewer to PiP (the viewer's Back button is the one
+        // for the app on the virtual display).
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (!isInPictureInPictureMode && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+                    enterPip()
+                } else {
+                    finish()
+                }
+            }
+        })
         open(intent)
         // Casting starts or stops: switch between the daemon and the cast's frame hub as the source.
         lifecycleScope.launch {
@@ -165,6 +207,7 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
                     viaHub = hub
                     Log.i(TAG, "showing display #$id (from the cast)")
                     ViewerController.onShowing(this, id)
+                    openTouch(id)
                 }
                 .onFailure {
                     attachedTo = null
@@ -183,6 +226,7 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
                     }
                     Log.i(TAG, "showing display #$id")
                     ViewerController.onShowing(this@ViewerActivity, id)
+                    openTouch(id)
                 }
                 .onFailure {
                     Log.e(TAG, "attach to display #$id failed", it)
@@ -207,6 +251,7 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
     }
 
     private fun detachNow() {
+        closeTouch()
         val id = attachedTo ?: return
         attachedTo = null
         viaHub?.let { hub ->
@@ -260,6 +305,74 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         controls.visibility = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
+        if (isInPictureInPictureMode) dots.clear()
+    }
+
+    // ---- Touch control ----
+
+    /** Opens the touch channel to [displayId]'s daemon (if touch control is on). */
+    private fun openTouch(displayId: Int) {
+        if (touchFor == displayId) return
+        closeTouch()
+        if (!EyeSettings.touchOptions().enabled) return
+        touchFor = displayId
+        lifecycleScope.launch {
+            val pipe = ParcelFileDescriptor.createPipe() // [0] read end -> daemon, [1] write end stays here
+            App.displays().openTouchChannel(displayId, pipe[0], token, taskId)
+                .onSuccess {
+                    runCatching { pipe[0].close() }
+                    if (touchFor != displayId) {
+                        runCatching { pipe[1].close() }
+                        return@onSuccess
+                    }
+                    touchPipe = pipe[1]
+                    touchOut = DataOutputStream(BufferedOutputStream(FileOutputStream(pipe[1].fileDescriptor), 512))
+                    backButton.visibility = View.VISIBLE
+                    Log.i(TAG, "touch control on for display #$displayId")
+                }
+                .onFailure {
+                    runCatching { pipe[0].close() }
+                    runCatching { pipe[1].close() }
+                    if (touchFor == displayId) touchFor = null
+                    Log.w(TAG, "no touch control for display #$displayId: ${it.message}")
+                    toast("Touch control unavailable: ${it.message}")
+                }
+        }
+    }
+
+    private fun closeTouch() {
+        touchFor = null
+        backButton.visibility = View.GONE
+        dots.clear()
+        val out = touchOut
+        val pipe = touchPipe
+        touchOut = null
+        touchPipe = null
+        if (out != null || pipe != null) {
+            touchWriter.execute {
+                runCatching { out?.close() }
+                runCatching { pipe?.close() }
+            }
+        }
+    }
+
+    private fun onPictureTouch(view: View, event: MotionEvent): Boolean {
+        if (isInPictureInPictureMode || touchOut == null || displayWidth <= 0) return false
+        val pointers = (0 until event.pointerCount).map { i ->
+            val (x, y) = TouchCodec.map(event.getX(i), event.getY(i), view.width, view.height, displayWidth, displayHeight)
+            TouchEvent.Pointer(event.getPointerId(i), x, y, event.getPressure(i).coerceIn(0f, 1f))
+        }
+        sendTouch(TouchEvent.Motion(event.action, event.downTime, event.eventTime, pointers))
+        if (EyeSettings.touchOptions().showTouches) dots.show(event) else dots.clear()
+        return true
+    }
+
+    private fun sendTouch(event: TouchEvent) {
+        val out = touchOut ?: return
+        touchWriter.execute {
+            runCatching { TouchCodec.write(out, event) }
+                .onFailure { Log.w(TAG, "touch event lost: ${it.message}") }
+        }
     }
 
     override fun onStop() {
@@ -270,6 +383,7 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     override fun onDestroy() {
         detachNow()
+        touchWriter.shutdown()
         ViewerController.onClosed(this)
         super.onDestroy()
     }

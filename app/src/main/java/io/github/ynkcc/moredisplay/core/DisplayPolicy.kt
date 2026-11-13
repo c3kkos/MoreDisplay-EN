@@ -22,6 +22,20 @@ enum class Visibility {
     }
 }
 
+/** Orientation override for an app (see [DisplayPolicy.orientation]). */
+enum class OrientationOverride {
+    /** The app decides, as usual. */
+    APP,
+
+    /** Portrait requests are answered with landscape, so the app fills a landscape virtual display. */
+    LANDSCAPE;
+
+    companion object {
+        fun fromName(name: String?): OrientationOverride =
+            entries.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: APP
+    }
+}
+
 /**
  * Visibility policy entry. Keyed by [uid] ([packageName] is for display/readability only).
  *
@@ -37,7 +51,9 @@ data class DisplayPolicy(
      * "Open on": every activity of this app is started on this display instead of the one the launcher (or the
      * notification, ...) asked for. Null = Android decides as usual.
      */
-    val launchDisplayId: Int? = null
+    val launchDisplayId: Int? = null,
+    /** Orientation override for this app's activities (applies wherever they are shown). */
+    val orientation: OrientationOverride = OrientationOverride.APP
 ) {
     fun describe(): String {
         val target = packageName?.let { "$it($uid)" } ?: "uid=$uid"
@@ -45,7 +61,8 @@ data class DisplayPolicy(
         val extras = listOfNotNull(
             recordDisplayId?.let { "record=$it" },
             operatedDisplayId?.let { "operated=$it" },
-            launchDisplayId?.let { "launch=$it" }
+            launchDisplayId?.let { "launch=$it" },
+            orientation.takeIf { it != OrientationOverride.APP }?.let { "orientation=${it.name.lowercase()}" }
         )
         val suffix = if (extras.isEmpty()) "" else " " + extras.joinToString(" ")
         return "$target ${visibility.name}[$ids]$suffix"

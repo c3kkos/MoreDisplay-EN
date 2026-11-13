@@ -33,9 +33,9 @@ object ProviderRpc {
     const val EXTRA_VIEWER_SURFACE = "viewer_surface"
     const val EXTRA_VIEWER_TOKEN = "viewer_token"
 
-    /** Cast sound: the pipe's write end (ParcelFileDescriptor) and binder token, next to StartAudioCapture. */
-    const val EXTRA_AUDIO_PIPE = "audio_pipe"
-    const val EXTRA_AUDIO_TOKEN = "audio_token"
+    /** A pipe end (ParcelFileDescriptor) and binder token, next to StartAudioCapture or OpenTouchChannel. */
+    const val EXTRA_PIPE = "pipe"
+    const val EXTRA_PIPE_TOKEN = "pipe_token"
 
     private const val TAG = "MoreDisplay_ProviderRpc"
 
@@ -51,7 +51,8 @@ object ProviderRpc {
             val request = RpcCodec.unmarshallRequest(payload)
             // The eye's surface and the cast sound pipe give access to hidden displays and to other apps' sound:
             // only MoreDisplay itself may ask for them.
-            if ((request is RpcRequest.AttachViewer || request is RpcRequest.StartAudioCapture) &&
+            if ((request is RpcRequest.AttachViewer || request is RpcRequest.StartAudioCapture ||
+                    request is RpcRequest.OpenTouchChannel) &&
                 !isTrustedViewer(callingUid)
             ) {
                 Log.w(TAG, "${request.javaClass.simpleName} refused for uid=$callingUid (not MoreDisplay)")
@@ -60,11 +61,13 @@ object ProviderRpc {
                 )
             }
             val viewer = if (request is RpcRequest.AttachViewer) viewerFrom(extras) else null
-            val audio = if (request is RpcRequest.StartAudioCapture) audioFrom(extras) else null
+            val pipe = if (request is RpcRequest.StartAudioCapture || request is RpcRequest.OpenTouchChannel) {
+                pipeFrom(extras)
+            } else null
             // The caller identity must be cleared: otherwise DMS checks permissions against the calling app's uid and refuses to create the display.
             val identity = Binder.clearCallingIdentity()
             try {
-                handleRequest(engine, request, viewer, audio)
+                handleRequest(engine, request, viewer, pipe)
             } finally {
                 Binder.restoreCallingIdentity(identity)
             }
@@ -86,11 +89,11 @@ object ProviderRpc {
 
     /** Unpacks the cast sound pipe and token sent next to a StartAudioCapture request. */
     @Suppress("DEPRECATION")
-    fun audioFrom(extras: Bundle): AudioAttachment? {
+    fun pipeFrom(extras: Bundle): PipeAttachment? {
         extras.classLoader = android.os.ParcelFileDescriptor::class.java.classLoader
-        val pipe = extras.getParcelable<android.os.ParcelFileDescriptor>(EXTRA_AUDIO_PIPE) ?: return null
-        val token = extras.getBinder(EXTRA_AUDIO_TOKEN) ?: return null
-        return AudioAttachment(pipe, token)
+        val pipe = extras.getParcelable<android.os.ParcelFileDescriptor>(EXTRA_PIPE) ?: return null
+        val token = extras.getBinder(EXTRA_PIPE_TOKEN) ?: return null
+        return PipeAttachment(pipe, token)
     }
 
     fun errorBundle(code: Int, message: String): Bundle =

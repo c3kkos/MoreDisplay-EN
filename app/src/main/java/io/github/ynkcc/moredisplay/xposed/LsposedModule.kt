@@ -52,8 +52,9 @@ class LsposedModule : XposedModule() {
         installAccessibilityRedirectHooks(param.classLoader)
         hookRecentsGate(param.classLoader)
         installLaunchRedirectHooks(param.classLoader)
+        installOrientationHooks(param.classLoader)
         DisplayPolicyRegistry.statsProvider = {
-            "${visibilityHookStats()} | ${recordMirrorHookStats()} | ${accessibilityHookStats()} | ${launchRedirectHookStats()}"
+            "${visibilityHookStats()} | ${recordMirrorHookStats()} | ${accessibilityHookStats()} | ${launchRedirectHookStats()} | ${orientationHookStats()}"
         }
     }
 

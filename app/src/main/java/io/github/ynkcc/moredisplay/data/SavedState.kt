@@ -2,6 +2,7 @@ package io.github.ynkcc.moredisplay.data
 
 import io.github.ynkcc.moredisplay.core.DisplayPolicy
 import io.github.ynkcc.moredisplay.core.DisplaySpec
+import io.github.ynkcc.moredisplay.core.OrientationOverride
 import io.github.ynkcc.moredisplay.core.Privilege
 import io.github.ynkcc.moredisplay.core.Visibility
 import java.net.URLDecoder
@@ -43,7 +44,8 @@ data class SavedPolicy(
     val displays: Set<DisplayRef>,
     val operated: DisplayRef?,
     val record: DisplayRef?,
-    val launch: DisplayRef? = null
+    val launch: DisplayRef? = null,
+    val orientation: OrientationOverride = OrientationOverride.APP
 )
 
 data class SavedState(
@@ -87,7 +89,8 @@ data class SavedState(
             displays = policy.displayIds.map { refFor(it) }.toSet(),
             operated = policy.operatedDisplayId?.let { refFor(it) },
             record = policy.recordDisplayId?.let { refFor(it) },
-            launch = policy.launchDisplayId?.let { refFor(it) }
+            launch = policy.launchDisplayId?.let { refFor(it) },
+            orientation = policy.orientation
         )
         return copy(policies = policies.filter { it.uid != policy.uid } + saved, initialized = true)
     }
@@ -147,7 +150,8 @@ data class SavedState(
                 displayIds = p.displays.mapNotNull { resolve(it) }.toSet(),
                 operatedDisplayId = resolve(p.operated),
                 recordDisplayId = resolve(p.record),
-                launchDisplayId = resolve(p.launch)
+                launchDisplayId = resolve(p.launch),
+                orientation = p.orientation
             )
         }
     }
@@ -171,7 +175,8 @@ data class SavedState(
                     p.displays.joinToString(",") { refString(it) },
                     p.operated?.let { refString(it) } ?: "",
                     p.record?.let { refString(it) } ?: "",
-                    p.launch?.let { refString(it) } ?: ""
+                    p.launch?.let { refString(it) } ?: "",
+                    p.orientation.name
                 ).joinToString("|")
             )
         }
@@ -204,7 +209,8 @@ data class SavedState(
                             displays = f[4].split(',').mapNotNull { parseRef(it) }.toSet(),
                             operated = parseRef(f[5]),
                             record = parseRef(f[6]),
-                            launch = parseRef(f.getOrNull(7)) // absent in files saved before 1.5
+                            launch = parseRef(f.getOrNull(7)), // absent in files saved before 1.5
+                            orientation = OrientationOverride.fromName(f.getOrNull(8)) // absent before 1.7
                         )
                     }
                 } // a corrupt line is skipped instead of losing everything

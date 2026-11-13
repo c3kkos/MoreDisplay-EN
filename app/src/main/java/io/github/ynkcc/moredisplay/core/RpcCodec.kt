@@ -119,6 +119,12 @@ object RpcCodec {
                 parcel.writeInt(request.id)
                 parcel.writeInt(request.displayId)
             }
+            is RpcRequest.OpenTouchChannel -> {
+                parcel.writeInt(TAG_OPEN_TOUCH)
+                parcel.writeInt(request.id)
+                parcel.writeInt(request.displayId)
+                parcel.writeInt(request.viewerTaskId)
+            }
         }
     }
 
@@ -139,6 +145,7 @@ object RpcCodec {
             TAG_DETACH_VIEWER -> RpcRequest.DetachViewer(parcel.readInt(), parcel.readInt())
             TAG_START_AUDIO -> RpcRequest.StartAudioCapture(parcel.readInt(), parcel.readInt())
             TAG_STOP_AUDIO -> RpcRequest.StopAudioCapture(parcel.readInt(), parcel.readInt())
+            TAG_OPEN_TOUCH -> RpcRequest.OpenTouchChannel(parcel.readInt(), parcel.readInt(), parcel.readInt())
             else -> error("unknown request tag $tag")
         }
     }
@@ -259,6 +266,7 @@ object RpcCodec {
         writeNullableInt(parcel, policy.operatedDisplayId)
         writeNullableInt(parcel, policy.recordDisplayId)
         writeNullableInt(parcel, policy.launchDisplayId)
+        parcel.writeInt(policy.orientation.ordinal)
     }
 
     private fun readPolicy(parcel: Parcel) = DisplayPolicy(
@@ -268,7 +276,8 @@ object RpcCodec {
         displayIds = buildSet { repeat(parcel.readInt()) { add(parcel.readInt()) } },
         operatedDisplayId = readNullableInt(parcel),
         recordDisplayId = readNullableInt(parcel),
-        launchDisplayId = readNullableInt(parcel)
+        launchDisplayId = readNullableInt(parcel),
+        orientation = OrientationOverride.entries.getOrElse(parcel.readInt()) { OrientationOverride.APP }
     )
 
     private fun writeNullablePolicy(parcel: Parcel, policy: DisplayPolicy?) {
@@ -330,6 +339,7 @@ object RpcCodec {
     private const val TAG_DETACH_VIEWER = 13
     private const val TAG_START_AUDIO = 14
     private const val TAG_STOP_AUDIO = 15
+    private const val TAG_OPEN_TOUCH = 16
 
     private const val TAG_PONG = 101
     private const val TAG_CAPABILITIES = 102

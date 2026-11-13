@@ -29,7 +29,8 @@ With MoreDisplay you can:
 | Make an app's screen recording capture a virtual screen instead of your real one | **Recording redirect** |
 | Make an accessibility app (auto-clicker, macro tool) tap on a virtual screen instead of your real one | **Accessibility redirect** |
 | Keep apps on virtual screens out of your Recents list | **Hide from recents** (automatic) |
-| Peek at what's running on a hidden screen | **The eye**: a picture-in-picture viewer, view only |
+| Peek at what's running on a hidden screen, and use it | **The eye**: a picture-in-picture viewer; touch control when expanded |
+| Make a portrait-only app fill a landscape screen | **Orientation: Landscape** in the app's policy |
 | Show a hidden screen on your TV, 1:1 | **Cast**: sends a virtual screen to a Chromecast at its own resolution |
 
 Everything happens inside the Android system process. MoreDisplay never touches or modifies the
@@ -135,11 +136,16 @@ Rules that decide what a specific app can see or where it acts.
    icon, notification, another app). Pick a virtual screen to keep the app off your real screen, then
    watch it with the eye. If the app was already open, close it from Recents once.
    Visibility alone does **not** move an app: it only decides which screens the app can *see*.
-5. **Recording redirect** (optional): pick a virtual screen (`#0 Built-in` means no redirect). When this app records the screen,
+5. **Orientation** (optional): **Landscape** makes an app that asks for portrait get landscape
+   instead, so it fills a landscape virtual screen (e.g. 1280×720) instead of showing as a narrow
+   portrait strip with black bars. A virtual screen never rotates, and your tablet's rotation lock
+   doesn't affect it. Applies to the app wherever it's shown; an app made only for portrait may look
+   stretched.
+6. **Recording redirect** (optional): pick a virtual screen (`#0 Built-in` means no redirect). When this app records the screen,
    it will record that virtual screen instead.
-6. **Accessibility redirect** (optional): pick a virtual screen. Taps and swipes performed by this
+7. **Accessibility redirect** (optional): pick a virtual screen. Taps and swipes performed by this
    app's accessibility service will land on that virtual screen.
-7. Tap **Save**. Rules take effect immediately, no reboot needed.
+8. Tap **Save**. Rules take effect immediately, no reboot needed.
 
 **Example: hide an app on screen #2 and watch it.** Add a policy for the app with **Whitelist only**
 → tick `#2`, and **Open on** → `#2`. Launch the app from your home screen as usual: it opens on #2
@@ -153,8 +159,8 @@ casting (see *Cast a virtual screen to a Chromecast* below).
 ### The eye: watch a hidden screen
 
 The eye shows a virtual screen live in a **picture-in-picture** window on your real screen, so you
-can see what a hidden app is doing without moving it. It is **view only** in this version: you
-can't tap or type into the window.
+can see what a hidden app is doing without moving it. Expand it to full screen to **control the app
+by touch**.
 
 - Turning the eye on or off **never touches the virtual screen**: it isn't recreated, resized or
   paused, and apps on it keep running exactly as before. Only the screen's picture is sent to the
@@ -162,6 +168,17 @@ can't tap or type into the window.
 - The window can be dragged, resized, **expanded to full screen** and shrunk back to
   picture-in-picture whenever you like. In full screen, use **Picture-in-picture** or **Close**.
 - Closing the window (or dragging it away) turns the eye off.
+
+**Touch control (full screen).** Expand the window to full screen and use the app with your fingers:
+taps, swipes, scrolling, pinch. A picture-in-picture window can't receive touches (Android keeps
+them for its own window controls), so the small window stays view only.
+
+- The **Back** button in the viewer's controls sends Back to the app on the virtual screen.
+- Your tablet's own **Back** (gesture or navigation bar) and **Home** stay yours: Back shrinks the
+  viewer to picture-in-picture, Home leaves it. After each touch, MoreDisplay gives Android's input
+  focus back to your screen so that this always works.
+- Touches only ever go to MoreDisplay's virtual screens, never to your own screen.
+- **Settings → Eye controls**: *Touch control in the full-screen eye* (on) and *Show touches* (off).
 
 There are four ways to toggle it, each with its own switch in **Settings**:
 
@@ -286,7 +303,7 @@ adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
 | `list` | List virtual screens | |
 | `remove` | Delete a virtual screen | `display_id` |
 | `hold` | Check that a virtual screen is still managed and alive | `display_id` |
-| `policy-set` | Add or replace a rule | `target_package` or `uid`, `mode` (`all` / `only` / `hide`), `display_ids`, `launch_display_id`, `record_display_id`, `operated_display_id` |
+| `policy-set` | Add or replace a rule | `target_package` or `uid`, `mode` (`all` / `only` / `hide`), `display_ids`, `launch_display_id`, `orientation` (`app` / `landscape`), `record_display_id`, `operated_display_id` |
 | `policy-list` | Show all rules | |
 | `policy-remove` | Delete a rule | `target_package` or `uid` |
 | `displays-for-uid` | Which screens an app can see | `target_package` or `uid` |

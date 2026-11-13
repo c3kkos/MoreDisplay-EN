@@ -28,6 +28,24 @@ object EyeSettings {
         refresh()
     }
 
+    private val touchFlow = MutableStateFlow(TouchOptions())
+
+    /** Touch control options (Settings → Eye controls). */
+    val touch: StateFlow<TouchOptions> get() {
+        touchFlow.value = touchOptions()
+        return touchFlow
+    }
+
+    fun touchOptions(): TouchOptions = TouchOptions(
+        enabled = prefs()?.getBoolean("touch_enabled", true) ?: true,
+        showTouches = prefs()?.getBoolean("show_touches", false) ?: false
+    )
+
+    fun setTouch(options: TouchOptions) {
+        prefs()?.edit()?.putBoolean("touch_enabled", options.enabled)?.putBoolean("show_touches", options.showTouches)?.apply()
+        touchFlow.value = options
+    }
+
     /** Remembers [displayId] as the last watched display (by saved key, so it survives a reboot). */
     fun rememberLast(displayId: Int) {
         val key = EyeLogic.keyOf(displayId, StateStore.load())
@@ -48,3 +66,6 @@ object EyeSettings {
         null
     }
 }
+
+/** Touch control in the full-screen eye viewer. */
+data class TouchOptions(val enabled: Boolean = true, val showTouches: Boolean = false)
