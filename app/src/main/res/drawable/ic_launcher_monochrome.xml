@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed (monochrome) launcher icon, Android 13+: the TV silhouette with the screen cut out and "MD" inside.
+     Android tints it; only the shape matters. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.12941"
+        android:scaleY="0.12941"
+        android:translateX="20.8706"
+        android:translateY="22.9412">
+        <path
+            android:pathData="M256,122 L176,46 M256,122 L340,40"
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="12"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M156,46 A20,20 0 1 0 196,46 A20,20 0 1 0 156,46 Z M320,40 A20,20 0 1 0 360,40 A20,20 0 1 0 320,40 Z"
+            android:fillColor="#FFFFFFFF" />
+        <path
+            android:pathData="M136,412 L160,412 L150,456 L120,456 Z M352,412 L376,412 L392,456 L362,456 Z"
+            android:fillColor="#FFFFFFFF" />
+        <path
+            android:pathData="M108,118 H404 A52,52 0 0 1 456,170 V366 A52,52 0 0 1 404,418 H108 A52,52 0 0 1 56,366 V170 A52,52 0 0 1 108,118 Z M118,150 H394 A30,30 0 0 1 424,180 V356 A30,30 0 0 1 394,386 H118 A30,30 0 0 1 88,356 V180 A30,30 0 0 1 118,150 Z"
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd" />
+        <path
+            android:pathData="M116,335 V205 H152 L181,255 L210,205 H246 V335 H214 V262 L181,312 L148,262 V335 Z"
+            android:fillColor="#FFFFFFFF" />
+        <path
+            android:pathData="M264,205 H320 A76,65 0 0 1 320,335 H264 Z M296,237 H318 A44,33 0 0 1 318,303 H296 Z"
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd" />
+    </group>
+</vector>
