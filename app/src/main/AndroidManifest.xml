@@ -4,6 +4,9 @@
 
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
 
+    <!-- Restores the saved displays and policies after a reboot (see BootReceiver). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!-- Policies resolve a package name to a uid (the CLI target_package argument, the package-name field in the UI), which relies on
          PackageManager.getApplicationInfo(other package). Android 11+ package visibility makes it throw
          NameNotFoundException (showing up as "package not installed"), hence this permission. -->
@@ -37,6 +40,15 @@
             android:exported="true"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
