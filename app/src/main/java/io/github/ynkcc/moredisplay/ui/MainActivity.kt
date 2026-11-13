@@ -26,6 +26,7 @@ import io.github.ynkcc.moredisplay.ui.navigation.Screen
 import io.github.ynkcc.moredisplay.ui.screens.DisplaysScreen
 import io.github.ynkcc.moredisplay.ui.screens.HomeScreen
 import io.github.ynkcc.moredisplay.ui.screens.PoliciesScreen
+import io.github.ynkcc.moredisplay.ui.screens.SettingsScreen
 import io.github.ynkcc.moredisplay.ui.theme.MoreDisplayTheme
 import io.github.ynkcc.moredisplay.ui.viewmodel.DisplaysViewModel
 import io.github.ynkcc.moredisplay.ui.viewmodel.MainViewModel
@@ -90,6 +91,9 @@ private fun MainRoot() {
                     PoliciesViewModel(App.displays(), App.context as android.app.Application)
                 }
                 PoliciesScreen(vm, snackbarHostState)
+            }
+            composable(Screen.SETTINGS.route) {
+                SettingsScreen()
             }
         }
     }

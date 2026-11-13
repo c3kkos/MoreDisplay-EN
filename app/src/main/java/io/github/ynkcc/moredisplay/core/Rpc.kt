@@ -1,7 +1,7 @@
 package io.github.ynkcc.moredisplay.core
 
 object DaemonProtocol {
-    const val DAEMON_VERSION = 18
+    const val DAEMON_VERSION = 19
 }
 
 sealed interface RpcRequest {
@@ -27,6 +27,16 @@ sealed interface RpcRequest {
 
     /** Enumerates, as the daemon, the displayIds "a given uid actually sees" (for policy acceptance/self-check). */
     data class DisplaysForUid(override val id: Int, val uid: Int) : RpcRequest
+
+    /**
+     * Eye on: send the display's frames to a viewer surface instead of its discard sink. The surface and the
+     * viewer's binder token can't be serialized into the request bytes, so they travel next to them (in the
+     * provider call's Bundle, or as arguments of IDaemonRpc.attachViewer).
+     */
+    data class AttachViewer(override val id: Int, val displayId: Int) : RpcRequest
+
+    /** Eye off: send the display's frames back to its sink. */
+    data class DetachViewer(override val id: Int, val displayId: Int) : RpcRequest
 }
 
 sealed interface RpcResponse {
@@ -46,5 +56,8 @@ sealed interface RpcResponse {
 interface Transport : AutoCloseable {
     val isConnected: Boolean
     suspend fun send(request: RpcRequest): RpcResponse
+
+    /** Sends an AttachViewer request together with the viewer's surface and token (see ViewerPayload). */
+    suspend fun attachViewer(request: RpcRequest.AttachViewer, viewer: android.os.Bundle): RpcResponse
     fun onDisconnected(handler: (() -> Unit)?)
 }

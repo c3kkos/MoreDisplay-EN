@@ -32,8 +32,9 @@ class ProviderTransport(
             false
         }
 
-        private fun call(context: Context, request: RpcRequest): ByteArray {
+        private fun call(context: Context, request: RpcRequest, viewer: Bundle? = null): ByteArray {
             val args = Bundle().apply {
+                viewer?.let { putAll(it) }
                 putByteArray(ProviderRpc.EXTRA_REQUEST, RpcCodec.marshallRequest(request))
             }
             val reply = context.contentResolver.call(
@@ -48,6 +49,9 @@ class ProviderTransport(
 
     override suspend fun send(request: RpcRequest): RpcResponse =
         RpcCodec.unmarshallResponse(call(context, request))
+
+    override suspend fun attachViewer(request: RpcRequest.AttachViewer, viewer: Bundle): RpcResponse =
+        RpcCodec.unmarshallResponse(call(context, request, viewer))
 
     override fun onDisconnected(handler: (() -> Unit)?) {
         // A provider call is a one-shot IPC with no long-lived connection, so no death notification is needed.

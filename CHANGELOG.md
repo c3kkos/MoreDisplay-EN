@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.4 (versionCode 5, English edition)
+
+### Added
+- **The eye: a picture-in-picture viewer for virtual displays (view only).** Shows a managed virtual display live
+  in a real Android PiP window on the built-in screen, which can be expanded to full screen and shrunk back at will.
+  Toggling the eye only redirects the display's output (`VirtualDisplay#setSurface`) between its internal sink and
+  the viewer: the display is never recreated, resized or paused, so the apps on it keep running untouched. The
+  viewer asks for frames at the display's full resolution. If the viewer dies, the daemon puts the sink back on its
+  own (binder death watch), so a crashed viewer can never freeze a display.
+- Four eye controls, each with its own switch in the new **Settings** tab: an eye button on every display card, a
+  Quick Settings tile, a home-screen widget and `adb ... --es action eye [--ei display_id N] [--es state on|off|toggle]`.
+  The tile and widget act on the last watched display, remembered across reboots.
+- On the Vector channel, apps on a watched display don't get the "display changed" events caused by switching the
+  eye on or off (a 1.5 s window per switch; added/removed events and system processes are never affected).
+
+### Changed
+- The Policies tab now uses a lock icon; the gear icon belongs to Settings.
+- In system_server, attaching a viewer is only accepted from the MoreDisplay app itself.
+
 ## 1.3 (versionCode 4, English edition)
 
 ### Fixed

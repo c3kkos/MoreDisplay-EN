@@ -47,7 +47,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import androidx.compose.ui.res.painterResource
+import io.github.ynkcc.moredisplay.R
 import io.github.ynkcc.moredisplay.core.DisplayInfo
+import io.github.ynkcc.moredisplay.eye.EyeControl
+import io.github.ynkcc.moredisplay.eye.EyeRequest
+import io.github.ynkcc.moredisplay.eye.EyeSettings
+import io.github.ynkcc.moredisplay.eye.ViewerController
 import io.github.ynkcc.moredisplay.core.Privilege
 import io.github.ynkcc.moredisplay.core.VirtualDisplayFlags
 import io.github.ynkcc.moredisplay.ui.BuiltInDisplay
@@ -67,6 +73,9 @@ fun DisplaysScreen(
     val workModes by vm.workModes.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val watching by ViewerController.watching.collectAsStateWithLifecycle()
+    val eyeEnabled by EyeSettings.enabled.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     // null = closed; non-null = create on that channel
     var createChannel by rememberSaveable { mutableStateOf<String?>(null) }
@@ -90,7 +99,6 @@ fun DisplaysScreen(
     val connectedChannels = workModes.keys.sortedByDescending { it.priority() }
 
     // The device's own screen (display 0) is always listed first as the default managed display.
-    val context = LocalContext.current
     val builtIn = remember { BuiltInDisplay.query(context) }
 
     Scaffold(
@@ -148,7 +156,12 @@ fun DisplaysScreen(
                                 info = info,
                                 channel = channel,
                                 enabled = !busy,
-                                onRemove = { vm.removeDisplay(info.displayId) }
+                                onRemove = { vm.removeDisplay(info.displayId) },
+                                eyeVisible = eyeEnabled[EyeControl.CARD_BUTTON] ?: true,
+                                watching = watching == info.displayId,
+                                onEye = {
+                                    ViewerController.apply(context, EyeRequest.TOGGLE, info.displayId)
+                                }
                             )
                         }
                     }
@@ -264,7 +277,10 @@ private fun DisplayCard(
     info: DisplayInfo,
     channel: Privilege,
     enabled: Boolean,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    eyeVisible: Boolean,
+    watching: Boolean,
+    onEye: () -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -274,6 +290,16 @@ private fun DisplayCard(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Spacer(Modifier.weight(1f))
+                if (eyeVisible) {
+                    IconButton(onClick = onEye) {
+                        Icon(
+                            painterResource(if (watching) R.drawable.ic_eye else R.drawable.ic_eye_off),
+                            contentDescription = if (watching) "Hide the viewer" else "Show in a picture-in-picture viewer",
+                            tint = if (watching) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 IconButton(onClick = onRemove, enabled = enabled) {
                     Icon(Icons.Filled.Delete, contentDescription = "Remove")
                 }

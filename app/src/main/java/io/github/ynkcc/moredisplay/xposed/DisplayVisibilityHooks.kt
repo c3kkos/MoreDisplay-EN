@@ -3,6 +3,7 @@ package io.github.ynkcc.moredisplay.xposed
 import android.os.Binder
 import android.util.Log
 import io.github.libxposed.api.XposedModule
+import io.github.ynkcc.moredisplay.daemon.EyeSwapGate
 import io.github.ynkcc.moredisplay.daemon.DisplayPolicyRegistry
 import java.lang.reflect.Field
 import java.util.concurrent.atomic.AtomicLong
@@ -140,7 +141,16 @@ private fun XposedModule.hookGetDisplayInfoInternal(classLoader: ClassLoader) = 
     log(Log.ERROR, TAG, "hook getDisplayInfoInternal failed", it)
 }
 
+/** Reads the "display added/removed" event codes, which the eye-swap gate must never swallow. */
+private fun resolveEyeGateEventCodes() = runCatching {
+    val global = Class.forName("android.hardware.display.DisplayManagerGlobal")
+    fun code(name: String) = global.getDeclaredField(name).apply { isAccessible = true }.getInt(null)
+    EyeSwapGate.shared.addedEvent = code("EVENT_DISPLAY_ADDED")
+    EyeSwapGate.shared.removedEvent = code("EVENT_DISPLAY_REMOVED")
+}.onFailure { Log.w(TAG, "event codes not found, using defaults (added=1, removed=3): ${it.message}") }
+
 private fun XposedModule.hookCallbackTransmitDisplayEvents(classLoader: ClassLoader) = runCatching {
+    resolveEyeGateEventCodes()
     val clz = classLoader.loadClass("com.android.server.display.DisplayManagerService\$CallbackRecord")
     val method = clz.declaredMethods.firstOrNull {
         it.name == "transmitDisplayEvent" &&
@@ -158,9 +168,13 @@ private fun XposedModule.hookCallbackTransmitDisplayEvents(classLoader: ClassLoa
             chain.proceed()
         } else {
             transmitHits.incrementAndGet()
+            val event = chain.getArg(1) as? Int
             if (!DisplayPolicyRegistry.isVisible(uid, displayId)) {
                 val s = transmitSuppressed.incrementAndGet()
                 Log.i(TAG, "EVENT transmit-suppress uid=$uid displayId=$displayId (suppress#=$s)")
+                null
+            } else if (event != null && EyeSwapGate.shared.shouldSwallow(displayId, event, uid)) {
+                Log.i(TAG, "EVENT eye-swap swallow uid=$uid displayId=$displayId event=$event")
                 null
             } else {
                 chain.proceed()
@@ -194,9 +208,13 @@ private fun XposedModule.hookCallbackNotifyDisplayEvent(classLoader: ClassLoader
             chain.proceed()
         } else {
             notifyHits.incrementAndGet()
+            val event = chain.getArg(1) as? Int
             if (!DisplayPolicyRegistry.isVisible(uid, displayId)) {
                 val s = notifySuppressed.incrementAndGet()
                 Log.i(TAG, "EVENT notify-suppress uid=$uid displayId=$displayId (suppress#=$s)")
+                false
+            } else if (event != null && EyeSwapGate.shared.shouldSwallow(displayId, event, uid)) {
+                Log.i(TAG, "EVENT eye-swap swallow uid=$uid displayId=$displayId event=$event")
                 false
             } else {
                 chain.proceed()

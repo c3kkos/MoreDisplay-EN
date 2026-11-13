@@ -99,6 +99,16 @@ object RpcCodec {
                 parcel.writeInt(request.id)
                 parcel.writeInt(request.uid)
             }
+            is RpcRequest.AttachViewer -> {
+                parcel.writeInt(TAG_ATTACH_VIEWER)
+                parcel.writeInt(request.id)
+                parcel.writeInt(request.displayId)
+            }
+            is RpcRequest.DetachViewer -> {
+                parcel.writeInt(TAG_DETACH_VIEWER)
+                parcel.writeInt(request.id)
+                parcel.writeInt(request.displayId)
+            }
         }
     }
 
@@ -115,6 +125,8 @@ object RpcCodec {
             TAG_REMOVE_POLICY -> RpcRequest.RemoveDisplayPolicy(parcel.readInt(), parcel.readInt())
             TAG_LIST_POLICIES -> RpcRequest.ListDisplayPolicies(parcel.readInt())
             TAG_DISPLAYS_FOR_UID -> RpcRequest.DisplaysForUid(parcel.readInt(), parcel.readInt())
+            TAG_ATTACH_VIEWER -> RpcRequest.AttachViewer(parcel.readInt(), parcel.readInt())
+            TAG_DETACH_VIEWER -> RpcRequest.DetachViewer(parcel.readInt(), parcel.readInt())
             else -> error("unknown request tag $tag")
         }
     }
@@ -300,6 +312,8 @@ object RpcCodec {
     private const val TAG_REMOVE_POLICY = 9
     private const val TAG_LIST_POLICIES = 10
     private const val TAG_DISPLAYS_FOR_UID = 11
+    private const val TAG_ATTACH_VIEWER = 12
+    private const val TAG_DETACH_VIEWER = 13
 
     private const val TAG_PONG = 101
     private const val TAG_CAPABILITIES = 102

@@ -113,6 +113,17 @@ class ShellDisplayEngine(
     /** displayId -> that display's output receiver (discarding sink), see [newSink]. */
     private val sinks = linkedMapOf<Int, ImageReader>()
 
+    private val viewers = ViewerSwitch(TAG) { id ->
+        val vd = virtualDisplays[id] ?: return@ViewerSwitch null
+        val sink = sinks[id] ?: return@ViewerSwitch null
+        vd to sink.surface
+    }
+
+    override fun attachViewer(displayId: Int, surface: Surface, token: android.os.IBinder) =
+        viewers.attach(displayId, surface, token)
+
+    override fun detachViewer(displayId: Int): Boolean = viewers.detach(displayId)
+
     private val sinkThread = HandlerThread("MoreDisplay-shell-sink").apply { start() }
     private val sinkHandler = Handler(sinkThread.looper)
 
@@ -266,6 +277,7 @@ class ShellDisplayEngine(
     }
 
     override fun removeDisplay(displayId: Int) {
+        viewers.forget(displayId)
         val info = managed.remove(displayId) ?: throw IllegalArgumentException("display $displayId not managed")
         val vd = virtualDisplays.remove(displayId) ?: throw IllegalStateException("display $displayId has no VirtualDisplay handle")
         val sink = sinks.remove(displayId)

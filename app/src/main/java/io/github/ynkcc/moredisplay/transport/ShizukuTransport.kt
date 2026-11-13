@@ -33,6 +33,12 @@ class ShizukuTransport(
         return RpcCodec.unmarshallResponse(responseBytes)
     }
 
+    override suspend fun attachViewer(request: RpcRequest.AttachViewer, viewer: android.os.Bundle): RpcResponse {
+        val responseBytes = runCatching { remote.attachViewer(RpcCodec.marshallRequest(request), viewer) }
+            .getOrElse { throw IllegalStateException("shizuku attachViewer failed: ${it.message}", it) }
+        return RpcCodec.unmarshallResponse(responseBytes)
+    }
+
     override fun onDisconnected(handler: (() -> Unit)?) {
         deathHandler?.let { runCatching { binder.unlinkToDeath(it, 0) } }
         deathHandler = null
