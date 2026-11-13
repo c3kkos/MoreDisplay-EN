@@ -11,9 +11,10 @@ import java.io.FileInputStream
 private const val TAG = "MoreDisplay_Encoder"
 
 /**
- * Hardware H.264 encoder fed by a surface. Emits Annex-B access units; key frames (one per second) carry the
- * SPS/PPS in front so every HLS segment can be decoded on its own. When the display doesn't change, the encoder
- * repeats the last frame so the stream keeps flowing.
+ * Hardware H.264 encoder fed by a surface. Emits Annex-B access units; key frames carry the SPS/PPS in front so
+ * every HLS segment can be decoded on its own. A key frame is requested every second explicitly
+ * (`PARAMETER_KEY_REQUEST_SYNC_FRAME`): some encoders don't honour `KEY_I_FRAME_INTERVAL` with surface input, and
+ * the HLS segments are cut on key frames.
  */
 class VideoEncoder(
     width: Int,
@@ -33,6 +34,16 @@ class VideoEncoder(
     private var running = true
     private var config: ByteArray? = null
     private val drain = Thread({ drainLoop() }, "MoreDisplay-video-enc")
+    private var lastSyncRequestMs = 0L
+
+    /** Frames and key frames produced (diagnostics). */
+    @Volatile
+    var encodedFrames = 0L
+        private set
+
+    @Volatile
+    var keyFrames = 0L
+        private set
 
     init {
         var w = width and 1.inv()
@@ -67,6 +78,15 @@ class VideoEncoder(
         drain.start()
     }
 
+    private fun requestKeyFrameIfDue() {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastSyncRequestMs < 1_000) return
+        lastSyncRequestMs = now
+        runCatching {
+            codec.setParameters(android.os.Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0) })
+        }
+    }
+
     fun stop() {
         running = false
         runCatching { codec.signalEndOfInputStream() }
@@ -79,6 +99,7 @@ class VideoEncoder(
     private fun drainLoop() {
         val info = MediaCodec.BufferInfo()
         while (running) {
+            requestKeyFrameIfDue()
             val index = runCatching { codec.dequeueOutputBuffer(info, 20_000) }.getOrElse { break }
             if (index < 0) continue
             val buffer = codec.getOutputBuffer(index)
@@ -90,6 +111,8 @@ class VideoEncoder(
                     config = bytes
                 } else {
                     val key = info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
+                    encodedFrames++
+                    if (key) keyFrames++
                     val frame = if (key) (config ?: ByteArray(0)) + bytes else bytes
                     runCatching { onFrame(frame, info.presentationTimeUs, key) }
                         .onFailure { Log.e(TAG, "video frame sink failed", it) }

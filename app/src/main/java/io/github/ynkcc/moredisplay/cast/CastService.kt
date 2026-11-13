@@ -55,7 +55,7 @@ class CastService : Service() {
                 val routeName = intent.getStringExtra(EXTRA_ROUTE_NAME) ?: "Chromecast"
                 goForeground("Starting to cast display #$displayId to $routeName…")
                 if (displayId < 0 || routeId == null) {
-                    fail("Nothing to cast")
+                    fail(CastError.DISPLAY_MISSING.format("no display or Cast device was given"))
                 } else {
                     begin(displayId, routeId, routeName)
                 }
@@ -73,13 +73,12 @@ class CastService : Service() {
                 val repo = App.displays()
                 if (repo.connectionStatus.value != ConnectionStatus.CONNECTED) repo.connect()
                 val info = repo.listDisplays().getOrNull()?.firstOrNull { it.displayId == displayId }
-                    ?: throw IllegalStateException("Display #$displayId is not managed by MoreDisplay")
+                    ?: throw CastException(CastError.DISPLAY_MISSING, "display #$displayId is not managed by MoreDisplay")
                 val config = CastSettings.current()
                 if (config.keepAwake) keepAwake()
                 val cast = CastPipeline(this@CastService, displayId, info.spec.width, info.spec.height, config)
                 pipeline = cast
-                val url = cast.start()
-                cast.frameHub?.let { CastController.setHub(displayId, it) }
+                val url = cast.start { hub -> CastController.setHub(displayId, hub) }
                 CastController.connectAndPlay(
                     this@CastService, routeId, displayId, url,
                     onFailure = { fail(it) },
@@ -87,9 +86,37 @@ class CastService : Service() {
                 )
                 CastController.setState(CastState.Casting(displayId, routeName, cast.soundNote))
                 goForeground("Casting display #$displayId to $routeName")
+                watch(cast)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 Log.e(TAG, "cast failed", e)
-                fail(e.message ?: e.javaClass.simpleName)
+                val message = if (e is CastException) e.message!!
+                else "${e.javaClass.simpleName}: ${e.message}"
+                fail(message)
+            }
+        }
+    }
+
+    /**
+     * While casting: logs the pipeline's counters every 10 s, and stops with CAST-08 if the Chromecast hasn't
+     * fetched anything from the tablet 30 s after it was told to play (network or Wi-Fi isolation problem).
+     */
+    private suspend fun watch(cast: CastPipeline) {
+        var seconds = 0
+        while (pipeline === cast) {
+            kotlinx.coroutines.delay(10_000)
+            seconds += 10
+            if (pipeline !== cast) return
+            Log.i(TAG, "cast stats after ${seconds}s: ${cast.diagnostics()}")
+            if (seconds >= 30 && cast.streamRequests == 0) {
+                fail(
+                    CastError.NOT_REACHED.format(
+                        "no request in 30 s; check that the tablet and the Chromecast are on the same network " +
+                            "without VPN or guest-Wi-Fi isolation (${cast.diagnostics()})"
+                    )
+                )
+                return
             }
         }
     }
@@ -110,8 +137,10 @@ class CastService : Service() {
     private fun teardown() {
         val cast = pipeline
         pipeline = null
-        CastController.setHub(-1, null)
+        // Order matters: first give the display its sink back and release the hub, then tell an open eye that the
+        // hub is gone, so it re-attaches to the daemon afterwards (not before, or the detach would hit the eye).
         cast?.stop()
+        CastController.setHub(-1, null)
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
     }

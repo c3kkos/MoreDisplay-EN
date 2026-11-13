@@ -79,7 +79,7 @@ object CastController {
         }.onFailure {
             Log.e(TAG, "discovery failed", it)
             stateFlow.value = CastState.Failed(
-                "Cast isn't available: ${it.message ?: "Google Play services are needed"}"
+                CastError.UNAVAILABLE.format(it.message ?: "Google Play services are needed")
             )
         }
     }
@@ -101,7 +101,7 @@ object CastController {
     /** Casts the display set in Settings → Cast (or [displayId]) to [device]. */
     fun start(context: Context, device: CastDevice, displayId: Int = CastSettings.current().displayId) {
         if (displayId < 0) {
-            stateFlow.value = CastState.Failed("Pick the display to cast in Settings → Cast")
+            stateFlow.value = CastState.Failed(CastError.DISPLAY_MISSING.format("pick the display to cast in Settings → Cast"))
             return
         }
         CastSettings.rememberDevice(device.id, device.name)
@@ -146,7 +146,7 @@ object CastController {
                 override fun onSessionStarted(session: CastSession, sessionId: String) = load(session, displayId, url, onFailure)
                 override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) = load(session, displayId, url, onFailure)
                 override fun onSessionStartFailed(session: CastSession, error: Int) =
-                    onFailure("Couldn't connect to the Cast device (error $error)")
+                    onFailure(CastError.DEVICE.format("session start failed, Cast status $error"))
                 override fun onSessionEnded(session: CastSession, error: Int) {
                     sessions.removeSessionManagerListener(this, CastSession::class.java)
                     onEnded()
@@ -155,7 +155,7 @@ object CastController {
                 override fun onSessionEnding(session: CastSession) = Unit
                 override fun onSessionResuming(session: CastSession, sessionId: String) = Unit
                 override fun onSessionResumeFailed(session: CastSession, error: Int) =
-                    onFailure("Couldn't reconnect to the Cast device (error $error)")
+                    onFailure(CastError.DEVICE.format("session resume failed, Cast status $error"))
                 override fun onSessionSuspended(session: CastSession, reason: Int) = Unit
             }
             sessionListener?.let { sessions.removeSessionManagerListener(it, CastSession::class.java) }
@@ -169,9 +169,9 @@ object CastController {
                 current != null && current.isConnected && router.selectedRoute.id == routeId ->
                     load(current, displayId, url, onFailure)
                 route != null -> router.selectRoute(route)
-                else -> onFailure("The Cast device isn't on the network any more")
+                else -> onFailure(CastError.DEVICE.format("the device isn't on the network any more"))
             }
-        }.onFailure { onFailure("Cast failed: ${it.message}") }
+        }.onFailure { onFailure(CastError.DEVICE.format("${it.javaClass.simpleName}: ${it.message}")) }
     }
 
     private var sessionListener: SessionManagerListener<CastSession>? = null
@@ -187,7 +187,8 @@ object CastController {
     }
 
     private fun load(session: CastSession, displayId: Int, url: String, onFailure: (String) -> Unit) {
-        val client = session.remoteMediaClient ?: return onFailure("The Cast device has no media player")
+        val client = session.remoteMediaClient
+            ?: return onFailure(CastError.PLAYBACK.format("the device has no media player"))
         val metadata = MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE).apply {
             putString(MediaMetadata.KEY_TITLE, "MoreDisplay · display #$displayId")
         }
@@ -201,7 +202,12 @@ object CastController {
         client.load(MediaLoadRequestData.Builder().setMediaInfo(media).setAutoplay(true).build())
             .setResultCallback { result ->
                 if (!result.status.isSuccess) {
-                    onFailure("The Chromecast couldn't play the stream (${result.status.statusCode})")
+                    onFailure(
+                        CastError.PLAYBACK.format(
+                            "load refused, Cast status ${result.status.statusCode}" +
+                                (result.status.statusMessage?.let { " ($it)" } ?: "")
+                        )
+                    )
                 } else {
                     Log.i(TAG, "Chromecast is playing $url")
                 }

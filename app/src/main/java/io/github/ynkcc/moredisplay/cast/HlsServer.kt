@@ -28,6 +28,11 @@ class HlsServer(private val segmenter: HlsSegmenter, private val address: InetAd
     private val pool = Executors.newFixedThreadPool(4) { r -> Thread(r, "MoreDisplay-hls").apply { isDaemon = true } }
     private val acceptor = Thread({ acceptLoop() }, "MoreDisplay-hls-accept").apply { isDaemon = true }
 
+    /** Requests received (diagnostics: 0 means the Chromecast never reached the tablet). */
+    @Volatile
+    var requests = 0
+        private set
+
     /** The playlist URL to give the Chromecast. */
     val playlistUrl: String = "http://${address.hostAddress}:${socket.localPort}/$token/live.m3u8"
 
@@ -54,6 +59,8 @@ class HlsServer(private val segmenter: HlsSegmenter, private val address: InetAd
                 val line = readLine(input) ?: break
                 if (line.isEmpty()) break
             }
+            requests++
+            Log.d(TAG, "request: $requestLine")
             val parts = requestLine.split(' ')
             if (parts.size < 2) return@runCatching respond(s.getOutputStream(), 400, "text/plain", null)
             val method = parts[0]

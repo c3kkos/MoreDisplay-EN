@@ -80,7 +80,15 @@ internal fun CastPanel(managed: Map<Int, DisplayInfo>) {
                 }
                 else -> {
                     if (s is CastState.Failed) {
-                        Text(s.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        // Selectable, so the error code and details can be copied into a bug report.
+                        androidx.compose.foundation.text.selection.SelectionContainer {
+                            Text(s.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        }
+                        Text(
+                            "The code is explained in the README's Troubleshooting section.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     when {
                         target == null -> Text(
