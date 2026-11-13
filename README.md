@@ -112,6 +112,9 @@ To add a virtual screen:
 Your last two sizes are remembered so you can reuse them with one tap.
 Tap the trash icon to remove a screen.
 
+Virtual screens created through Vector are listed under **MoreDisplay**, the ones created through
+Shizuku under **Shizuku**.
+
 ### 3. Policies
 
 Rules that decide what a specific app can see or where it acts.
@@ -129,6 +132,17 @@ Rules that decide what a specific app can see or where it acts.
 5. **Accessibility redirect** (optional): pick a virtual screen. Taps and swipes performed by this
    app's accessibility service will land on that virtual screen.
 6. Tap **Save**. Rules take effect immediately, no reboot needed.
+
+### Your setup survives reboots
+
+Every virtual screen and rule you create (in the app or with adb) is saved. After a reboot,
+MoreDisplay recreates your virtual screens and re-applies your rules on its own, a few seconds
+after the phone finishes starting. The recreated screens may get new numbers (`#3` may become `#4`);
+your rules follow them automatically.
+
+> Some phones (Xiaomi/HyperOS, OPPO/ColorOS, vivo, Huawei and others) stop apps from starting at boot.
+> If your setup doesn't come back after a reboot, allow **Autostart** for MoreDisplay in the system
+> settings, or just open the app once: it restores everything when it connects.
 
 > Your real main screen (display `0`) can never be hidden from an app; that would crash it.
 
@@ -210,6 +224,7 @@ Common `flags` values (add them together): `1` PUBLIC, `64` SUPPORTS_TOUCH,
 | An app still sees a hidden screen | Close and reopen that app; it may have cached the screen list. |
 | Recording redirect does nothing | Make sure the target virtual screen exists and has something running on it. |
 | Install fails over an older version | Uninstall the original MoreDisplay first (different signature). |
+| Setup not back after a reboot | Allow Autostart for MoreDisplay, or open the app and tap Connect. Displays made through Shizuku come back once Shizuku is running. |
 
 ---
 

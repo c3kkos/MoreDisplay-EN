@@ -74,7 +74,7 @@ class DisplaysViewModel(
 }
 
 fun Privilege.label(): String = when (this) {
-    Privilege.LSPOSED -> "LSPosed"
+    Privilege.LSPOSED -> "MoreDisplay"
     Privilege.ROOT -> "Root"
     Privilege.SHELL_SHIZUKU -> "Shizuku"
     Privilege.NONE -> "Unassigned"

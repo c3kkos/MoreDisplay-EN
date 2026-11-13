@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3 (versionCode 4, English edition)
+
+### Fixed
+- **Displays and policies were lost on every reboot.** They only lived in the system's memory. Every change made
+  from the app or from adb is now saved, and after a reboot MoreDisplay recreates the saved displays and re-applies
+  the policies automatically. Because recreated displays get new ids, policies are saved against the display
+  itself and re-linked to its new id. The same restore runs whenever the app connects, without creating duplicates.
+  On the first start of 1.3, the displays and policies that already exist are adopted and saved.
+
+### Changed
+- The Displays page labels the Xposed channel **MoreDisplay** instead of "LSPosed".
+
 ## 1.2 (versionCode 3, English edition)
 
 ### Fixed

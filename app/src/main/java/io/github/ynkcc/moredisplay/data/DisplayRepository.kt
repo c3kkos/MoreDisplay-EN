@@ -108,6 +108,8 @@ class DisplayRepository : IDisplayRepository {
         } else {
             status.value = ConnectionStatus.CONNECTED
             error.value = null
+            runCatching { restoreSavedState() }
+                .onFailure { Log.e(TAG, "restoring saved displays/policies failed", it) }
             refreshDisplays()
             Log.i(TAG, "connected slots=${slots.keys} (skipped errors=$errors)")
             Result.success(Unit)
@@ -170,15 +172,24 @@ class DisplayRepository : IDisplayRepository {
                     if (privilege == null) "not connected"
                     else "no connected daemon for $privilege (connected=${slots.keys})"
                 ))
-            val response = sendOn(slot) { RpcRequest.CreateDisplay(nextId(), spec) }
-            val info = (response as? RpcResponse.DisplayResult)?.info
-            if (info != null) {
-                origin.value = origin.value + (info.displayId to slot.provider.privilege)
-                Result.success(info)
-            } else {
-                response.asError("createDisplay")
+            createOn(slot, spec).onSuccess { info ->
+                // Remember it so it is recreated after a reboot.
+                StateStore.update {
+                    it.withDisplay(SavedDisplay(newKey(), slot.provider.privilege, info.spec, info.displayId))
+                }
             }
         }
+
+    private suspend fun createOn(slot: Slot, spec: DisplaySpec): Result<DisplayInfo> {
+        val response = sendOn(slot) { RpcRequest.CreateDisplay(nextId(), spec) }
+        val info = (response as? RpcResponse.DisplayResult)?.info
+        return if (info != null) {
+            origin.value = origin.value + (info.displayId to slot.provider.privilege)
+            Result.success(info)
+        } else {
+            response.asError("createDisplay")
+        }
+    }
 
     override suspend fun holdDisplay(displayId: Int): Result<DisplayInfo> = withContext(slotDispatcher) {
         var last: RpcResponse? = null
@@ -199,6 +210,7 @@ class DisplayRepository : IDisplayRepository {
             val response = sendOn(slot) { RpcRequest.RemoveDisplay(nextId(), displayId) }
             if (response is RpcResponse.Ok) {
                 origin.value = origin.value - displayId
+                StateStore.update { it.withoutDisplayId(displayId) }
                 return@withContext Result.success(Unit)
             }
             last = response
@@ -239,7 +251,10 @@ class DisplayRepository : IDisplayRepository {
     override suspend fun setDisplayPolicy(policy: DisplayPolicy): Result<DisplayPolicy> {
         val response = callSystemServer { RpcRequest.SetDisplayPolicy(nextId(), policy) }
         return (response as? RpcResponse.PolicyResult)?.policy
-            ?.let { Result.success(it) }
+            ?.let { stored ->
+                StateStore.update { it.withPolicy(stored) }
+                Result.success(stored)
+            }
             ?: Result.failure(IllegalStateException("setDisplayPolicy: ${response.message()}"))
     }
 
@@ -253,7 +268,10 @@ class DisplayRepository : IDisplayRepository {
     override suspend fun removeDisplayPolicy(uid: Int): Result<Unit> {
         val response = callSystemServer { RpcRequest.RemoveDisplayPolicy(nextId(), uid) }
         return when (response) {
-            is RpcResponse.Ok -> Result.success(Unit)
+            is RpcResponse.Ok -> {
+                StateStore.update { it.withoutPolicy(uid) }
+                Result.success(Unit)
+            }
             else -> Result.failure(IllegalStateException("removeDisplayPolicy $uid: ${response.message()}"))
         }
     }
@@ -278,6 +296,80 @@ class DisplayRepository : IDisplayRepository {
         scope.cancel()
         slotDispatcher.close()
     }
+
+    // ---- Persistence: bring back saved displays and policies (after a reboot, or after a channel reconnects) ----
+
+    /**
+     * Recreates saved displays that don't exist right now and re-applies the saved policies with the displays'
+     * current ids. Safe to run on every connect: displays that still exist are matched and left alone.
+     * On the first run (nothing saved yet) the displays and policies that exist now are adopted instead.
+     * Runs on [slotDispatcher].
+     */
+    private suspend fun restoreSavedState() {
+        val current = mutableListOf<Pair<Int, Pair<Privilege, DisplaySpec>>>()
+        for (slot in slots.values) {
+            val list = (sendOn(slot) { RpcRequest.ListDisplays(nextId()) } as? RpcResponse.DisplayList)?.displays
+            list?.forEach {
+                current += it.displayId to (slot.provider.privilege to it.spec)
+                origin.value = origin.value + (it.displayId to slot.provider.privilege)
+            }
+        }
+
+        val saved = StateStore.load()
+        if (!saved.initialized) {
+            adoptCurrentState(current)
+            return
+        }
+
+        // 1. Displays: keep the ones still alive, recreate the others on their own channel.
+        val alive = saved.matchAlive(current)
+        val newIds = linkedMapOf<String, Int>()
+        for (d in saved.displays) {
+            val id = alive[d.key] ?: run {
+                val slot = slots[d.channel] ?: return@run SavedDisplay.NOT_PRESENT
+                createOn(slot, d.spec).fold(
+                    onSuccess = {
+                        Log.i(TAG, "restored display ${d.spec.name} ${d.spec.width}x${d.spec.height} as #${it.displayId} (was #${d.lastId})")
+                        it.displayId
+                    },
+                    onFailure = {
+                        Log.w(TAG, "could not restore display ${d.key}: ${it.message}")
+                        SavedDisplay.NOT_PRESENT
+                    }
+                )
+            }
+            if (id != d.lastId) newIds[d.key] = id
+        }
+        val state = if (newIds.isEmpty()) saved else StateStore.update { s ->
+            newIds.entries.fold(s) { acc, (key, id) -> acc.withRestoredId(key, id) }
+        }
+
+        // 2. Policies: only the system_server (Xposed) channel can apply them.
+        val xposed = slots[Privilege.LSPOSED] ?: return
+        for (policy in state.resolvedPolicies()) {
+            when (val r = sendOn(xposed) { RpcRequest.SetDisplayPolicy(nextId(), policy) }) {
+                is RpcResponse.PolicyResult -> Unit
+                else -> Log.w(TAG, "could not restore policy ${policy.describe()}: ${r.message()}")
+            }
+        }
+        Log.i(TAG, "restore done: ${state.displays.size} display(s), ${state.policies.size} polic(ies), recreated=${newIds.size}")
+    }
+
+    /** First run with persistence: save what already exists so it isn't lost at the next reboot. */
+    private suspend fun adoptCurrentState(current: List<Pair<Int, Pair<Privilege, DisplaySpec>>>) {
+        var adopted = SavedState(initialized = true)
+        current.forEach { (id, cs) ->
+            adopted = adopted.withDisplay(SavedDisplay(newKey(), cs.first, cs.second, id))
+        }
+        slots[Privilege.LSPOSED]?.let { xposed ->
+            (sendOn(xposed) { RpcRequest.ListDisplayPolicies(nextId()) } as? RpcResponse.PolicyList)
+                ?.policies?.forEach { adopted = adopted.withPolicy(it) }
+        }
+        StateStore.update { adopted }
+        Log.i(TAG, "adopted ${adopted.displays.size} display(s) and ${adopted.policies.size} polic(ies) for persistence")
+    }
+
+    private fun newKey(): String = java.util.UUID.randomUUID().toString()
 
     // ---- Internal helpers ----
 
