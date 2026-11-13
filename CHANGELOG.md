@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.6.0-EN (versionCode 10, English edition)
+
+### Added
+- **Cast a virtual display to a Chromecast, 1:1.** The display's frames go (through the same output switch as the
+  eye) to the tablet's hardware H.264 encoder at the display's own size, are packaged as a live HLS stream (MPEG-TS,
+  1-second segments) and served by a small HTTP server on the tablet's Wi-Fi address under a random per-session
+  path. The Chromecast plays it with Google's Default Media Receiver, so no Cast developer registration is needed.
+  Delay about 2–5 s.
+- **Cast sound (Vector only):** in system_server, a dynamic audio policy (match uid, loop-back only) takes the sound
+  of the apps set to "Open on" the cast display off the speaker and pipes it to MoreDisplay, which encodes it as AAC
+  in the same stream. Apps that forbid sound capture are respected.
+- The eye works while casting: a GPU frame hub copies each frame to the encoder and the eye window.
+- Settings → Cast (display, quality, frame rate, sound, keep awake), a Cast card with device picker on the Displays
+  tab, "Casting to …" on the display card, a notification with Stop, and `adb ... --es action cast --es state on|off`.
+- Unit tests for the MPEG-TS muxer and the HLS segmenter.
+
+### Changed
+- Internal protocol version 21 (cast sound requests): reboot after updating.
+- New permissions: network access, foreground service (connected device), notifications, wake lock.
+
 ## 1.5.1-EN (versionCode 9, English edition)
 
 ### Changed

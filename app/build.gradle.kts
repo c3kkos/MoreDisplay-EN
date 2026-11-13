@@ -13,8 +13,8 @@ android {
         applicationId = "io.github.ynkcc.moredisplay"
         minSdk = 29
         targetSdk = 37
-        versionCode = 9
-        versionName = "1.5.1-EN"
+        versionCode = 10
+        versionName = "1.6.0-EN"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -75,6 +75,9 @@ dependencies {
     compileOnly(libs.androidx.annotation)
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
+    // Casting a virtual display to a Chromecast (Default Media Receiver; device discovery via MediaRouter).
+    implementation(libs.play.services.cast.framework)
+    implementation(libs.androidx.mediarouter)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)

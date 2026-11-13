@@ -30,6 +30,7 @@ With MoreDisplay you can:
 | Make an accessibility app (auto-clicker, macro tool) tap on a virtual screen instead of your real one | **Accessibility redirect** |
 | Keep apps on virtual screens out of your Recents list | **Hide from recents** (automatic) |
 | Peek at what's running on a hidden screen | **The eye**: a picture-in-picture viewer, view only |
+| Show a hidden screen on your TV, 1:1 | **Cast**: sends a virtual screen to a Chromecast at its own resolution |
 
 Everything happens inside the Android system process. MoreDisplay never touches or modifies the
 target apps themselves.
@@ -146,7 +147,8 @@ and nothing appears on your screen. Tap the eye to watch it.
 
 ### 4. Settings
 
-Turn each of the four eye controls on or off (see *The eye* below). All are on by default.
+Turn each of the four eye controls on or off (see *The eye* below; all are on by default), and set up
+casting (see *Cast a virtual screen to a Chromecast* below).
 
 ### The eye: watch a hidden screen
 
@@ -175,6 +177,31 @@ The tile and the widget need a "last watched" screen, so use the card button (or
 Limitations: one viewer at a time (showing another screen switches the viewer to it); apps that
 protect their content (DRM video, secure screens) show black; hiding the eye's tiny "display
 changed" notice from the watched apps works on the Vector channel only.
+
+### Cast a virtual screen to a Chromecast
+
+Run an app on a virtual screen at the resolution you want (for example 1280×720) and show that screen
+on your TV **1:1**, with the app's sound, while your own screen stays free. Your screen's resolution
+plays no part.
+
+1. Create a virtual screen at the size you want (Displays tab), and give the app a policy with
+   **Open on** → that screen.
+2. **Settings → Cast**: pick that screen, and optionally the quality, frame rate and sound.
+3. **Displays tab → Cast display …**, pick your Chromecast. The card shows *Casting to …* and a
+   notification lets you stop it from anywhere.
+
+How it works: the screen's picture goes to the tablet's hardware video encoder (no scaling), and the
+Chromecast plays it as a live stream from a small server in MoreDisplay, using Google's built-in
+player (no account or registration needed). The eye keeps working while casting.
+
+- **Delay**: about 2–5 seconds. Picture and sound are delayed together, so they stay in sync.
+- **Sound** (Vector only): the sound of the apps set to *Open on* the cast screen goes to the TV
+  instead of the tablet speaker, until the cast stops. Apps that forbid sound capture stay silent.
+  With Shizuku, casting is picture-only.
+- **Copy-protected video stays black** (Netflix, Disney+, Prime Video and similar): Android won't put
+  it on a virtual screen, by design. Use those apps' own Cast button.
+- Needs Google Play services, and the tablet and the Chromecast on the same Wi-Fi.
+- If the app pauses when the tablet screen turns off, turn on **Keep the tablet awake while casting**.
 
 ### Your setup survives reboots
 
@@ -241,6 +268,10 @@ adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
 adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action eye --ei display_id 2 --es state on
 adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action eye --es state off
 
+# Cast: start (display from Settings, last Chromecast used) / stop
+adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action cast --es state on
+adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action cast --es state off
+
 # Show all rules / delete a rule / check what an app can see
 adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action policy-list
 adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
@@ -260,6 +291,7 @@ adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
 | `policy-remove` | Delete a rule | `target_package` or `uid` |
 | `displays-for-uid` | Which screens an app can see | `target_package` or `uid` |
 | `shizuku-permit` | Ask for the Shizuku permission | |
+| `cast` | Cast a virtual screen to the last Chromecast used | `state` (`on` / `off`), `display_id` (default: Settings → Cast) |
 | `eye` | Show or hide a virtual screen in the PiP viewer | `display_id` (default: last watched), `state` (`on` / `off` / `toggle`, default `toggle`) |
 
 Common `flags` values (add them together): `1` PUBLIC, `64` SUPPORTS_TOUCH,
@@ -277,6 +309,9 @@ Common `flags` values (add them together): `1` PUBLIC, `64` SUPPORTS_TOUCH,
 | Recording redirect does nothing | Make sure the target virtual screen exists and has something running on it. |
 | Install fails over an older version | Uninstall the original MoreDisplay first (different signature). |
 | My first virtual screen is `#2`, not `#1` | Android picks the number, not MoreDisplay: each new display gets the next free number and numbers aren't reused until a restart. Something else used `#1` (see **Other displays** at the bottom of the Displays tab), or a screen was removed earlier. Always use the number shown in the app. |
+| Cast: *Connect the tablet to the same Wi-Fi* | The tablet and the Chromecast must be on the same Wi-Fi network. |
+| Cast: the TV shows an error or stays loading | Check that the tablet and the Chromecast are on the same network and that no VPN or "client isolation" (common on guest Wi-Fi) blocks them from talking to each other. |
+| Cast: no sound on the TV | Sound needs the Vector channel and an app set to *Open on* the cast screen. Some apps forbid sound capture. |
 | The eye tile/widget says *No display* | Tap the eye on a display card once, so it knows which screen to show. |
 | The eye window is black | The app on that screen protects its content (DRM/secure), or nothing is drawn there yet. |
 | Setup not back after a reboot | Allow Autostart for MoreDisplay, or open the app and tap Connect. Displays made through Shizuku come back once Shizuku is running. |

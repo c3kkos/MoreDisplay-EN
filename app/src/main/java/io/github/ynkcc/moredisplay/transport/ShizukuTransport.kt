@@ -33,8 +33,8 @@ class ShizukuTransport(
         return RpcCodec.unmarshallResponse(responseBytes)
     }
 
-    override suspend fun attachViewer(request: RpcRequest.AttachViewer, viewer: android.os.Bundle): RpcResponse {
-        val responseBytes = runCatching { remote.attachViewer(RpcCodec.marshallRequest(request), viewer) }
+    override suspend fun sendWithExtras(request: RpcRequest, extras: android.os.Bundle): RpcResponse {
+        val responseBytes = runCatching { remote.attachViewer(RpcCodec.marshallRequest(request), extras) }
             .getOrElse { throw IllegalStateException("shizuku attachViewer failed: ${it.message}", it) }
         return RpcCodec.unmarshallResponse(responseBytes)
     }

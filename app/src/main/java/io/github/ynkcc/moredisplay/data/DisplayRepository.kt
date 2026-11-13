@@ -258,7 +258,7 @@ class DisplayRepository : IDisplayRepository {
             var last: RpcResponse? = null
             for (slot in orderedSlotsFor(displayId)) {
                 val response = runCatching {
-                    slot.transport.attachViewer(RpcRequest.AttachViewer(nextId(), displayId), viewer)
+                    slot.transport.sendWithExtras(RpcRequest.AttachViewer(nextId(), displayId), viewer)
                 }.getOrElse { RpcResponse.Error(0, -1, "rpc failed: ${it.message}") }
                 if (response is RpcResponse.Ok) return@withContext Result.success(Unit)
                 last = response
@@ -275,6 +275,35 @@ class DisplayRepository : IDisplayRepository {
             last = response
         }
         Result.failure(IllegalStateException("detachViewer $displayId: ${last?.message() ?: "not connected"}"))
+    }
+
+    /**
+     * Cast sound on: the sound of the apps set to "Open on" [displayId] is written into [pipe] (a pipe's write
+     * end) instead of the speaker. Only the system_server (Vector) channel can do this. Returns the uids routed.
+     */
+    suspend fun startAudioCapture(
+        displayId: Int,
+        pipe: android.os.ParcelFileDescriptor,
+        token: android.os.IBinder
+    ): Result<List<Int>> = withContext(slotDispatcher) {
+        val slot = slots[Privilege.LSPOSED]
+            ?: return@withContext Result.failure(IllegalStateException("cast sound needs the Vector channel"))
+        val extras = android.os.Bundle().apply {
+            putParcelable(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_AUDIO_PIPE, pipe)
+            putBinder(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_AUDIO_TOKEN, token)
+        }
+        val response = runCatching {
+            slot.transport.sendWithExtras(RpcRequest.StartAudioCapture(nextId(), displayId), extras)
+        }.getOrElse { RpcResponse.Error(0, -1, "rpc failed: ${it.message}") }
+        (response as? RpcResponse.IdList)?.let { Result.success(it.ids) }
+            ?: Result.failure(IllegalStateException(response.message()))
+    }
+
+    /** Cast sound off: the apps get their speaker back. */
+    suspend fun stopAudioCapture(displayId: Int): Result<Unit> {
+        val response = callSystemServer { RpcRequest.StopAudioCapture(nextId(), displayId) }
+        return if (response is RpcResponse.Ok) Result.success(Unit)
+        else Result.failure(IllegalStateException(response.message()))
     }
 
     // ---- Policy operations: only effective inside the system_server daemon (Xposed slot) ----

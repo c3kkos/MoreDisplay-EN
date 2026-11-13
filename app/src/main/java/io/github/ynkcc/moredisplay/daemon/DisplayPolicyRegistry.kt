@@ -130,6 +130,11 @@ object DisplayPolicyRegistry {
         }
     }
 
+    /** Uids of the apps set to "Open on" [displayId] (whose sound is cast with that display). */
+    fun uidsOpeningOn(displayId: Int): Set<Int> = synchronized(lock) {
+        policies.values.filter { it.launchDisplayId == displayId }.mapTo(mutableSetOf()) { it.uid }
+    }
+
     /** Whether this uid should see this displayId. */
     fun isVisible(uid: Int, displayId: Int): Boolean {
         // The default display is never filtered (see the DEFAULT_DISPLAY_ID comment: removing it makes DecorContext NPE).
