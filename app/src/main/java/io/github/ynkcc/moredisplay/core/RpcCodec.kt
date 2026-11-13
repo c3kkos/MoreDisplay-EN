@@ -109,6 +109,16 @@ object RpcCodec {
                 parcel.writeInt(request.id)
                 parcel.writeInt(request.displayId)
             }
+            is RpcRequest.StartAudioCapture -> {
+                parcel.writeInt(TAG_START_AUDIO)
+                parcel.writeInt(request.id)
+                parcel.writeInt(request.displayId)
+            }
+            is RpcRequest.StopAudioCapture -> {
+                parcel.writeInt(TAG_STOP_AUDIO)
+                parcel.writeInt(request.id)
+                parcel.writeInt(request.displayId)
+            }
         }
     }
 
@@ -127,6 +137,8 @@ object RpcCodec {
             TAG_DISPLAYS_FOR_UID -> RpcRequest.DisplaysForUid(parcel.readInt(), parcel.readInt())
             TAG_ATTACH_VIEWER -> RpcRequest.AttachViewer(parcel.readInt(), parcel.readInt())
             TAG_DETACH_VIEWER -> RpcRequest.DetachViewer(parcel.readInt(), parcel.readInt())
+            TAG_START_AUDIO -> RpcRequest.StartAudioCapture(parcel.readInt(), parcel.readInt())
+            TAG_STOP_AUDIO -> RpcRequest.StopAudioCapture(parcel.readInt(), parcel.readInt())
             else -> error("unknown request tag $tag")
         }
     }
@@ -316,6 +328,8 @@ object RpcCodec {
     private const val TAG_DISPLAYS_FOR_UID = 11
     private const val TAG_ATTACH_VIEWER = 12
     private const val TAG_DETACH_VIEWER = 13
+    private const val TAG_START_AUDIO = 14
+    private const val TAG_STOP_AUDIO = 15
 
     private const val TAG_PONG = 101
     private const val TAG_CAPABILITIES = 102

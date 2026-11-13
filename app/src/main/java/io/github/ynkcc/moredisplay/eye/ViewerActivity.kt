@@ -22,6 +22,8 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import io.github.ynkcc.moredisplay.App
+import io.github.ynkcc.moredisplay.cast.CastController
+import io.github.ynkcc.moredisplay.cast.FrameHub
 import io.github.ynkcc.moredisplay.core.ConnectionStatus
 import io.github.ynkcc.moredisplay.core.DisplayInfo
 import kotlinx.coroutines.launch
@@ -59,6 +61,9 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
     private var attachedTo: Int? = null
     private var surfaceReady = false
 
+    /** Set while the eye shows the display from the cast's frame hub instead of from the daemon. */
+    private var viaHub: FrameHub? = null
+
     private lateinit var frame: AspectFrameLayout
     private lateinit var surfaceView: SurfaceView
     private lateinit var controls: LinearLayout
@@ -90,6 +95,10 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
         }
         setContentView(root)
         open(intent)
+        // Casting starts or stops: switch between the daemon and the cast's frame hub as the source.
+        lifecycleScope.launch {
+            CastController.activeHub.collect { reroute() }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -149,6 +158,21 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
         val surface = surfaceView.holder.surface
         if (surface == null || !surface.isValid) return
         attachedTo = id
+        // While the display is being cast, its frames already come to this app: show them from the cast's hub.
+        CastController.hubFor(id)?.let { hub ->
+            runCatching { hub.setOutput("eye", surface) }
+                .onSuccess {
+                    viaHub = hub
+                    Log.i(TAG, "showing display #$id (from the cast)")
+                    ViewerController.onShowing(this, id)
+                }
+                .onFailure {
+                    attachedTo = null
+                    toast("Can't show display #$id: ${it.message}")
+                    finish()
+                }
+            return
+        }
         lifecycleScope.launch {
             App.displays().attachViewer(id, surface, token)
                 .onSuccess {
@@ -169,9 +193,28 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
         }
     }
 
+    private fun reroute() {
+        val id = attachedTo ?: return
+        val hub = CastController.hubFor(id)
+        if (hub === viaHub) return
+        if (viaHub != null) {
+            // The cast stopped: its hub (and our output on it) is gone. Attach to the daemon again.
+            viaHub = null
+        }
+        // The cast started: its hub replaced this viewer in the daemon, so there's nothing to detach there.
+        attachedTo = null
+        if (surfaceReady) attach()
+    }
+
     private fun detachNow() {
         val id = attachedTo ?: return
         attachedTo = null
+        viaHub?.let { hub ->
+            viaHub = null
+            runCatching { hub.setOutput("eye", null) }
+            Log.i(TAG, "stopped showing display #$id (from the cast)")
+            return
+        }
         runBlocking {
             withTimeoutOrNull(1_500) { App.displays().detachViewer(id) }
         }

@@ -4,6 +4,7 @@ import android.app.Activity
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import io.github.ynkcc.moredisplay.core.DisplayPolicy
 import io.github.ynkcc.moredisplay.core.DisplaySpec
@@ -52,6 +53,9 @@ class CommandActivity : Activity() {
 
         /** The eye: show/hide a managed display in the PiP viewer (`--es state on|off|toggle`, default toggle). */
         private const val ACTION_EYE = "eye"
+
+        /** Cast a display to the last used Chromecast (`--es state on|off`, `--ei display_id N`). */
+        private const val ACTION_CAST = "cast"
         const val EXTRA_STATE = "state"
     }
 
@@ -238,9 +242,40 @@ class CommandActivity : Activity() {
                 }
                 controller.apply(this@CommandActivity, request, target)
             }
+            ACTION_CAST -> {
+                val cast = io.github.ynkcc.moredisplay.cast.CastController
+                when (intent.getStringExtra(EXTRA_STATE)?.lowercase() ?: "on") {
+                    "off", "0", "false" -> {
+                        cast.stop(this@CommandActivity)
+                        "cast stopped"
+                    }
+                    "on", "1", "true" -> {
+                        val displayId = intent.getIntExtra(EXTRA_DISPLAY_ID, -1).takeIf { it >= 0 }
+                            ?: io.github.ynkcc.moredisplay.cast.CastSettings.current().displayId
+                        require(displayId >= 0) { "no display to cast: pass --ei display_id N or set it in Settings → Cast" }
+                        val routeId = io.github.ynkcc.moredisplay.cast.CastSettings.lastDeviceId()
+                            ?: throw IllegalArgumentException("no Cast device used yet: cast once from the app first")
+                        val app = applicationContext
+                        // Device discovery runs on the main thread; give it up to 15 s to find the last device.
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { cast.startDiscovery(app) }
+                        val device = kotlinx.coroutines.withTimeoutOrNull(15_000) {
+                            cast.devices.first { list -> list.any { it.id == routeId } }.first { it.id == routeId }
+                        }
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { cast.stopDiscovery(app) }
+                        device ?: throw IllegalStateException(
+                            "${io.github.ynkcc.moredisplay.cast.CastSettings.lastDeviceName() ?: "the last Cast device"} wasn't found on the network"
+                        )
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            cast.start(this@CommandActivity, device, displayId)
+                        }
+                        "casting display $displayId to ${device.name}"
+                    }
+                    else -> throw IllegalArgumentException("--es state must be on or off")
+                }
+            }
             else -> throw IllegalArgumentException(
                 "unknown action: $action (create/remove/hold/list/policy-set/policy-list/" +
-                    "policy-remove/displays-for-uid/shizuku-permit/eye)"
+                    "policy-remove/displays-for-uid/shizuku-permit/eye/cast)"
             )
         }
     }

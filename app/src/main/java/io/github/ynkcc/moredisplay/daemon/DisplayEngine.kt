@@ -18,10 +18,23 @@ interface DisplayEngine {
 
     /** Eye off: send the display's frames back to its sink. Returns false if it wasn't being watched. */
     fun detachViewer(displayId: Int): Boolean
+
+    /**
+     * Cast sound on: route the sound of the apps set to "Open on" [displayId] into [pipe] (see [AudioRouter]).
+     * Returns the uids routed. Only the system_server engine can do this.
+     */
+    fun startAudioCapture(displayId: Int, pipe: android.os.ParcelFileDescriptor, token: android.os.IBinder): List<Int> =
+        throw UnsupportedOperationException("cast sound needs the Vector channel (system_server)")
+
+    /** Cast sound off. Returns false if it wasn't on. */
+    fun stopAudioCapture(displayId: Int): Boolean = false
 }
 
 /** The viewer's surface and binder token, carried next to an [RpcRequest.AttachViewer] request. */
 class ViewerAttachment(val surface: android.view.Surface, val token: android.os.IBinder)
+
+/** The cast sound pipe's write end and binder token, carried next to an [RpcRequest.StartAudioCapture] request. */
+class AudioAttachment(val pipe: android.os.ParcelFileDescriptor, val token: android.os.IBinder)
 
 interface RpcServer {
     fun start(engine: DisplayEngine)
@@ -31,7 +44,8 @@ interface RpcServer {
 fun handleRequest(
     engine: DisplayEngine,
     request: RpcRequest,
-    viewer: ViewerAttachment? = null
+    viewer: ViewerAttachment? = null,
+    audio: AudioAttachment? = null
 ): RpcResponse = when (request) {
     is RpcRequest.Ping -> RpcResponse.Pong(
         request.id,
@@ -122,6 +136,24 @@ fun handleRequest(
         .fold(
             { RpcResponse.Ok(request.id) },
             { RpcResponse.Error(request.id, 10, "detachViewer failed: ${it.message}") }
+        )
+    is RpcRequest.StartAudioCapture -> if (audio == null) {
+        RpcResponse.Error(request.id, 12, "startAudioCapture: no pipe received")
+    } else {
+        runCatching { engine.startAudioCapture(request.displayId, audio.pipe, audio.token) }
+            .fold(
+                { RpcResponse.IdList(request.id, it) },
+                {
+                    android.util.Log.e("MoreDisplay_Rpc", "startAudioCapture ${request.displayId} failed", it)
+                    runCatching { audio.pipe.close() }
+                    RpcResponse.Error(request.id, 13, "cast sound: ${it.message}")
+                }
+            )
+    }
+    is RpcRequest.StopAudioCapture -> runCatching { engine.stopAudioCapture(request.displayId) }
+        .fold(
+            { RpcResponse.Ok(request.id) },
+            { RpcResponse.Error(request.id, 14, "stopAudioCapture failed: ${it.message}") }
         )
 }
 

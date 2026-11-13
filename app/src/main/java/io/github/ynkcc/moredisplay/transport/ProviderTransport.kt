@@ -50,8 +50,8 @@ class ProviderTransport(
     override suspend fun send(request: RpcRequest): RpcResponse =
         RpcCodec.unmarshallResponse(call(context, request))
 
-    override suspend fun attachViewer(request: RpcRequest.AttachViewer, viewer: Bundle): RpcResponse =
-        RpcCodec.unmarshallResponse(call(context, request, viewer))
+    override suspend fun sendWithExtras(request: RpcRequest, extras: Bundle): RpcResponse =
+        RpcCodec.unmarshallResponse(call(context, request, extras))
 
     override fun onDisconnected(handler: (() -> Unit)?) {
         // A provider call is a one-shot IPC with no long-lived connection, so no death notification is needed.

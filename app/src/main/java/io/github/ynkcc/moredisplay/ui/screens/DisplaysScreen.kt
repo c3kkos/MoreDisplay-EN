@@ -51,6 +51,8 @@ import kotlinx.coroutines.isActive
 import androidx.compose.ui.res.painterResource
 import io.github.ynkcc.moredisplay.R
 import io.github.ynkcc.moredisplay.core.DisplayInfo
+import io.github.ynkcc.moredisplay.cast.CastController
+import io.github.ynkcc.moredisplay.cast.CastState
 import io.github.ynkcc.moredisplay.eye.EyeControl
 import io.github.ynkcc.moredisplay.eye.EyeRequest
 import io.github.ynkcc.moredisplay.eye.EyeSettings
@@ -76,6 +78,7 @@ fun DisplaysScreen(
     val busy by vm.busy.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val watching by ViewerController.watching.collectAsStateWithLifecycle()
+    val castState by CastController.state.collectAsStateWithLifecycle()
     val eyeEnabled by EyeSettings.enabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -117,6 +120,7 @@ fun DisplaysScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            item(key = "cast") { CastPanel(byChannel.values.flatten().associateBy { it.displayId }) }
             item(key = "builtin-header") { BuiltInSectionHeader() }
             item(key = "builtin") { BuiltInDisplayCard(builtIn) }
             item(key = "builtin-spacer") { Spacer(Modifier.height(4.dp)) }
@@ -165,6 +169,8 @@ fun DisplaysScreen(
                                 onRemove = { vm.removeDisplay(info.displayId) },
                                 eyeVisible = eyeEnabled[EyeControl.CARD_BUTTON] ?: true,
                                 watching = watching == info.displayId,
+                                castingTo = (castState as? CastState.Casting)
+                                    ?.takeIf { it.displayId == info.displayId }?.device,
                                 onEye = {
                                     ViewerController.apply(context, EyeRequest.TOGGLE, info.displayId)
                                 }
@@ -320,6 +326,7 @@ private fun DisplayCard(
     onRemove: () -> Unit,
     eyeVisible: Boolean,
     watching: Boolean,
+    castingTo: String?,
     onEye: () -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -347,6 +354,13 @@ private fun DisplayCard(
                 IconButton(onClick = onRemove, enabled = enabled) {
                     Icon(Icons.Filled.Delete, contentDescription = "Remove")
                 }
+            }
+            castingTo?.let {
+                Text(
+                    "Casting to $it",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
             Text(
                 "${info.spec.width}×${info.spec.height} @ ${info.spec.densityDpi}dpi",

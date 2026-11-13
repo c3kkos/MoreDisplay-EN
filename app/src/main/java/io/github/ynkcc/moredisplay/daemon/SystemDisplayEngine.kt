@@ -59,6 +59,16 @@ class SystemDisplayEngine(
 
     override val capabilities = CapabilityMatrix.forPrivilege(Privilege.LSPOSED)
 
+    private val audio = AudioRouter(systemContext)
+
+    override fun startAudioCapture(
+        displayId: Int,
+        pipe: android.os.ParcelFileDescriptor,
+        token: android.os.IBinder
+    ): List<Int> = audio.start(displayId, DisplayPolicyRegistry.uidsOpeningOn(displayId), pipe, token)
+
+    override fun stopAudioCapture(displayId: Int): Boolean = audio.stop(displayId)
+
     private val viewers = ViewerSwitch(TAG) { id ->
         synchronized(lock) {
             val vd = handles[id] ?: return@synchronized null
@@ -219,6 +229,7 @@ class SystemDisplayEngine(
         val vd: VirtualDisplay
         val sink: ImageReader?
         viewers.forget(displayId)
+        audio.stop(displayId)
         synchronized(lock) {
             managed.remove(displayId) ?: throw IllegalArgumentException("display $displayId not managed")
             vd = handles.remove(displayId)

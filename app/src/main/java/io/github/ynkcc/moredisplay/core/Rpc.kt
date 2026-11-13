@@ -1,7 +1,7 @@
 package io.github.ynkcc.moredisplay.core
 
 object DaemonProtocol {
-    const val DAEMON_VERSION = 20
+    const val DAEMON_VERSION = 21
 }
 
 sealed interface RpcRequest {
@@ -37,6 +37,16 @@ sealed interface RpcRequest {
 
     /** Eye off: send the display's frames back to its sink. */
     data class DetachViewer(override val id: Int, val displayId: Int) : RpcRequest
+
+    /**
+     * Cast sound (system_server only): route the sound of the apps set to "Open on" [displayId] into a pipe instead
+     * of the speaker. The pipe's write end and a binder token travel next to the request, like the eye's surface.
+     * Answered with an [RpcResponse.IdList] of the uids routed.
+     */
+    data class StartAudioCapture(override val id: Int, val displayId: Int) : RpcRequest
+
+    /** Cast sound off: give [displayId]'s apps their speaker back. */
+    data class StopAudioCapture(override val id: Int, val displayId: Int) : RpcRequest
 }
 
 sealed interface RpcResponse {
@@ -57,7 +67,10 @@ interface Transport : AutoCloseable {
     val isConnected: Boolean
     suspend fun send(request: RpcRequest): RpcResponse
 
-    /** Sends an AttachViewer request together with the viewer's surface and token (see ViewerPayload). */
-    suspend fun attachViewer(request: RpcRequest.AttachViewer, viewer: android.os.Bundle): RpcResponse
+    /**
+     * Sends a request together with objects that can't be serialized into the request bytes (the eye's surface,
+     * the cast sound pipe, binder tokens), packed in [extras].
+     */
+    suspend fun sendWithExtras(request: RpcRequest, extras: android.os.Bundle): RpcResponse
     fun onDisconnected(handler: (() -> Unit)?)
 }
