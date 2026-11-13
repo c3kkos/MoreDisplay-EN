@@ -159,7 +159,7 @@ class LsposedModule : XposedModule() {
                         ProviderRpc.errorBundle(-2, "daemon engine not ready in system_server")
                     } else {
                         Log.i(TAG, "RPC hit on ${chain.executable.declaringClass.simpleName}#${chain.executable.name}")
-                        ProviderRpc.handle(engine, extras)
+                        ProviderRpc.handle(engine, extras, SystemDaemon::isMoreDisplayUid)
                     }
                 }
             }
@@ -243,6 +243,14 @@ object SystemDaemon {
         if (systemContext == null) systemContext = ctx
         createEngine()
     }
+
+    /** True if [uid] belongs to the MoreDisplay app (the only caller allowed to attach a viewer). */
+    fun isMoreDisplayUid(uid: Int): Boolean = runCatching {
+        val packages = systemContext?.packageManager?.getPackagesForUid(uid) ?: return false
+        MORE_DISPLAY_PACKAGE in packages
+    }.getOrDefault(false)
+
+    private const val MORE_DISPLAY_PACKAGE = "io.github.ynkcc.moredisplay"
 
     private fun createEngine(): DisplayEngine? {
         engineRef?.let { return it }

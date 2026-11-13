@@ -12,14 +12,27 @@ interface DisplayEngine {
     fun holdDisplay(displayId: Int): DisplayInfo?
     fun removeDisplay(displayId: Int)
     fun listDisplays(): List<DisplayInfo>
+
+    /** Eye on: send the display's frames to [surface] (see [ViewerSwitch]). */
+    fun attachViewer(displayId: Int, surface: android.view.Surface, token: android.os.IBinder)
+
+    /** Eye off: send the display's frames back to its sink. Returns false if it wasn't being watched. */
+    fun detachViewer(displayId: Int): Boolean
 }
+
+/** The viewer's surface and binder token, carried next to an [RpcRequest.AttachViewer] request. */
+class ViewerAttachment(val surface: android.view.Surface, val token: android.os.IBinder)
 
 interface RpcServer {
     fun start(engine: DisplayEngine)
     fun stop()
 }
 
-fun handleRequest(engine: DisplayEngine, request: RpcRequest): RpcResponse = when (request) {
+fun handleRequest(
+    engine: DisplayEngine,
+    request: RpcRequest,
+    viewer: ViewerAttachment? = null
+): RpcResponse = when (request) {
     is RpcRequest.Ping -> RpcResponse.Pong(
         request.id,
         android.os.Process.myPid(),
@@ -91,6 +104,23 @@ fun handleRequest(engine: DisplayEngine, request: RpcRequest): RpcResponse = whe
     }.getOrElse {
         RpcResponse.Error(request.id, 6, "displaysForUid failed: ${it.message}")
     }
+    is RpcRequest.AttachViewer -> if (viewer == null) {
+        RpcResponse.Error(request.id, 8, "attachViewer: no viewer surface received")
+    } else {
+        runCatching { engine.attachViewer(request.displayId, viewer.surface, viewer.token) }
+            .fold(
+                { RpcResponse.Ok(request.id) },
+                {
+                    android.util.Log.e("MoreDisplay_Rpc", "attachViewer ${request.displayId} failed", it)
+                    RpcResponse.Error(request.id, 9, "attachViewer failed: ${it.message}")
+                }
+            )
+    }
+    is RpcRequest.DetachViewer -> runCatching { engine.detachViewer(request.displayId) }
+        .fold(
+            { RpcResponse.Ok(request.id) },
+            { RpcResponse.Error(request.id, 10, "detachViewer failed: ${it.message}") }
+        )
 }
 
 /** Prints hook hit counters, distinguishing "installed" from "effective". */

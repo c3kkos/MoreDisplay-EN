@@ -46,6 +46,10 @@ class CommandActivity : Activity() {
 
         /** Request Shizuku permission (shows the system dialog; the result is logged after the user taps Allow). */
         private const val ACTION_SHIZUKU_PERMIT = "shizuku-permit"
+
+        /** The eye: show/hide a managed display in the PiP viewer (`--es state on|off|toggle`, default toggle). */
+        private const val ACTION_EYE = "eye"
+        const val EXTRA_STATE = "state"
     }
 
     private val executor = Executors.newSingleThreadExecutor { r ->
@@ -212,9 +216,27 @@ class CommandActivity : Activity() {
                     }
                 }
             }
+            ACTION_EYE -> {
+                val eye = io.github.ynkcc.moredisplay.eye.EyeControl.ADB
+                require(io.github.ynkcc.moredisplay.eye.EyeSettings.isEnabled(eye)) {
+                    "the eye adb command is turned off in MoreDisplay → Settings"
+                }
+                val request = io.github.ynkcc.moredisplay.eye.EyeRequest.parse(intent.getStringExtra(EXTRA_STATE))
+                    ?: throw IllegalArgumentException("--es state must be on, off or toggle")
+                val explicit = intent.getIntExtra(EXTRA_DISPLAY_ID, -1).takeIf { it >= 0 }
+                val controller = io.github.ynkcc.moredisplay.eye.ViewerController
+                val target = if (explicit != null) {
+                    require(explicit in controller.managedIds()) { "display $explicit is not managed by MoreDisplay" }
+                    explicit
+                } else {
+                    controller.watching.value ?: controller.lastTarget()
+                        ?: throw IllegalArgumentException("no display to show yet: pass --ei display_id N")
+                }
+                controller.apply(this@CommandActivity, request, target)
+            }
             else -> throw IllegalArgumentException(
                 "unknown action: $action (create/remove/hold/list/policy-set/policy-list/" +
-                    "policy-remove/displays-for-uid/shizuku-permit)"
+                    "policy-remove/displays-for-uid/shizuku-permit/eye)"
             )
         }
     }

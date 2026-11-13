@@ -29,6 +29,7 @@ With MoreDisplay you can:
 | Make an app's screen recording capture a virtual screen instead of your real one | **Recording redirect** |
 | Make an accessibility app (auto-clicker, macro tool) tap on a virtual screen instead of your real one | **Accessibility redirect** |
 | Keep apps on virtual screens out of your Recents list | **Hide from recents** (automatic) |
+| Peek at what's running on a hidden screen | **The eye**: a picture-in-picture viewer, view only |
 
 Everything happens inside the Android system process. MoreDisplay never touches or modifies the
 target apps themselves.
@@ -82,7 +83,7 @@ open the latest run with a green check mark, scroll to **Artifacts** and downloa
 
 ## How to use the app
 
-The app has three tabs at the bottom.
+The app has four tabs at the bottom.
 
 ### 1. Home
 
@@ -110,7 +111,7 @@ To add a virtual screen:
    You will need this number later.
 
 Your last two sizes are remembered so you can reuse them with one tap.
-Tap the trash icon to remove a screen.
+Tap the trash icon to remove a screen. Tap the **eye** icon to watch it (see below).
 
 Virtual screens created through Vector are listed under **MoreDisplay**, the ones created through
 Shizuku under **Shizuku**.
@@ -132,6 +133,38 @@ Rules that decide what a specific app can see or where it acts.
 5. **Accessibility redirect** (optional): pick a virtual screen. Taps and swipes performed by this
    app's accessibility service will land on that virtual screen.
 6. Tap **Save**. Rules take effect immediately, no reboot needed.
+
+### 4. Settings
+
+Turn each of the four eye controls on or off (see *The eye* below). All are on by default.
+
+### The eye: watch a hidden screen
+
+The eye shows a virtual screen live in a **picture-in-picture** window on your real screen, so you
+can see what a hidden app is doing without moving it. It is **view only** in this version: you
+can't tap or type into the window.
+
+- Turning the eye on or off **never touches the virtual screen**: it isn't recreated, resized or
+  paused, and apps on it keep running exactly as before. Only the screen's picture is sent to the
+  window instead of being thrown away.
+- The window can be dragged, resized, **expanded to full screen** and shrunk back to
+  picture-in-picture whenever you like. In full screen, use **Picture-in-picture** or **Close**.
+- Closing the window (or dragging it away) turns the eye off.
+
+There are four ways to toggle it, each with its own switch in **Settings**:
+
+| Control | How to use it |
+| --- | --- |
+| **Eye button on display cards** | The eye icon on each virtual screen in the Displays tab |
+| **Quick Settings tile** | Edit your Quick Settings and add the **Eye** tile. It toggles the last watched screen |
+| **Home-screen widget** | Add the **MoreDisplay eye** widget. It toggles the last watched screen |
+| **adb command** | `--es action eye`, see *Advanced* below |
+
+The tile and the widget need a "last watched" screen, so use the card button (or adb) once first.
+
+Limitations: one viewer at a time (showing another screen switches the viewer to it); apps that
+protect their content (DRM video, secure screens) show black; hiding the eye's tiny "display
+changed" notice from the watched apps works on the Vector channel only.
 
 ### Your setup survives reboots
 
@@ -190,6 +223,10 @@ adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
 adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
   --es action policy-set --es target_package com.example.app --es mode all --ei record_display_id 2
 
+# The eye: show / hide / toggle screen 2 in the picture-in-picture viewer
+adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action eye --ei display_id 2 --es state on
+adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action eye --es state off
+
 # Show all rules / delete a rule / check what an app can see
 adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action policy-list
 adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
@@ -209,6 +246,7 @@ adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
 | `policy-remove` | Delete a rule | `target_package` or `uid` |
 | `displays-for-uid` | Which screens an app can see | `target_package` or `uid` |
 | `shizuku-permit` | Ask for the Shizuku permission | |
+| `eye` | Show or hide a virtual screen in the PiP viewer | `display_id` (default: last watched), `state` (`on` / `off` / `toggle`, default `toggle`) |
 
 Common `flags` values (add them together): `1` PUBLIC, `64` SUPPORTS_TOUCH,
 `1024` TRUSTED (usually Vector only), `4096` ALWAYS_UNLOCKED (Vector only), `16384` OWN_FOCUS.
@@ -224,6 +262,8 @@ Common `flags` values (add them together): `1` PUBLIC, `64` SUPPORTS_TOUCH,
 | An app still sees a hidden screen | Close and reopen that app; it may have cached the screen list. |
 | Recording redirect does nothing | Make sure the target virtual screen exists and has something running on it. |
 | Install fails over an older version | Uninstall the original MoreDisplay first (different signature). |
+| The eye tile/widget says *No display* | Tap the eye on a display card once, so it knows which screen to show. |
+| The eye window is black | The app on that screen protects its content (DRM/secure), or nothing is drawn there yet. |
 | Setup not back after a reboot | Allow Autostart for MoreDisplay, or open the app and tap Connect. Displays made through Shizuku come back once Shizuku is running. |
 
 ---

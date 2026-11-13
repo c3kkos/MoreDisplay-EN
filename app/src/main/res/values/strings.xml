@@ -2,4 +2,9 @@
     <string name="app_name">MoreDisplay</string>
     <!-- Shown as the module description by modern Xposed managers (Vector reads android:description for libxposed modules). -->
     <string name="xposed_description">Manage virtual displays from system_server, and redirect per-app display visibility, screen recording source and accessibility gestures to a managed display. Scope: System Framework (system).</string>
+    <string name="eye_tile_label">Eye</string>
+    <string name="eye_widget_name">MoreDisplay eye</string>
+    <string name="eye_widget_description">Show or hide the last watched virtual display in a picture-in-picture window.</string>
+    <string name="eye_widget_no_display">No display</string>
+    <string name="viewer_label">MoreDisplay viewer</string>
 </resources>

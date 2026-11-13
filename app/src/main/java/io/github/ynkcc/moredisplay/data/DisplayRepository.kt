@@ -246,6 +246,37 @@ class DisplayRepository : IDisplayRepository {
 
     override fun displayOrigin(displayId: Int): Privilege? = origin.value[displayId]
 
+    // ---- Eye: show a managed display in the PiP viewer (routed to the channel that owns the display) ----
+
+    /** Sends [displayId]'s frames to [surface]; [token] lets the daemon notice if the viewer dies. */
+    suspend fun attachViewer(displayId: Int, surface: android.view.Surface, token: android.os.IBinder): Result<Unit> =
+        withContext(slotDispatcher) {
+            val viewer = android.os.Bundle().apply {
+                putParcelable(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_VIEWER_SURFACE, surface)
+                putBinder(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_VIEWER_TOKEN, token)
+            }
+            var last: RpcResponse? = null
+            for (slot in orderedSlotsFor(displayId)) {
+                val response = runCatching {
+                    slot.transport.attachViewer(RpcRequest.AttachViewer(nextId(), displayId), viewer)
+                }.getOrElse { RpcResponse.Error(0, -1, "rpc failed: ${it.message}") }
+                if (response is RpcResponse.Ok) return@withContext Result.success(Unit)
+                last = response
+            }
+            Result.failure(IllegalStateException("attachViewer $displayId: ${last?.message() ?: "not connected"}"))
+        }
+
+    /** Sends [displayId]'s frames back to its sink. */
+    suspend fun detachViewer(displayId: Int): Result<Unit> = withContext(slotDispatcher) {
+        var last: RpcResponse? = null
+        for (slot in orderedSlotsFor(displayId)) {
+            val response = sendOn(slot) { RpcRequest.DetachViewer(nextId(), displayId) }
+            if (response is RpcResponse.Ok) return@withContext Result.success(Unit)
+            last = response
+        }
+        Result.failure(IllegalStateException("detachViewer $displayId: ${last?.message() ?: "not connected"}"))
+    }
+
     // ---- Policy operations: only effective inside the system_server daemon (Xposed slot) ----
 
     override suspend fun setDisplayPolicy(policy: DisplayPolicy): Result<DisplayPolicy> {

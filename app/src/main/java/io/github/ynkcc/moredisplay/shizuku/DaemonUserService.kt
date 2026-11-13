@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.annotation.Keep
 import io.github.ynkcc.moredisplay.core.RpcCodec
 import io.github.ynkcc.moredisplay.core.RpcResponse
+import io.github.ynkcc.moredisplay.daemon.ProviderRpc
 import io.github.ynkcc.moredisplay.daemon.ShellDisplayEngine
 import io.github.ynkcc.moredisplay.daemon.handleRequest
 
@@ -55,6 +56,14 @@ class DaemonUserService @Keep constructor(context: Context) : IDaemonRpc.Stub() 
         Log.d(TAG, "rpc request=$request")
         val response = runCatching { handleRequest(engine, request) }
             .getOrElse { RpcResponse.Error(request.id, -1, "daemon handler crashed: ${it.stackTraceToString().take(2000)}") }
+        return RpcCodec.marshallResponse(response)
+    }
+
+    override fun attachViewer(payload: ByteArray, viewer: android.os.Bundle?): ByteArray {
+        val request = RpcCodec.unmarshallRequest(payload)
+        val attachment = viewer?.let { ProviderRpc.viewerFrom(it) }
+        val response = runCatching { handleRequest(engine, request, attachment) }
+            .getOrElse { RpcResponse.Error(request.id, -1, "attachViewer crashed: ${it.message}") }
         return RpcCodec.marshallResponse(response)
     }
 

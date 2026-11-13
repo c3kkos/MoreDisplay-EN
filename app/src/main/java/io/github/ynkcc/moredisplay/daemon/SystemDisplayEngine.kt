@@ -59,6 +59,19 @@ class SystemDisplayEngine(
 
     override val capabilities = CapabilityMatrix.forPrivilege(Privilege.LSPOSED)
 
+    private val viewers = ViewerSwitch(TAG) { id ->
+        synchronized(lock) {
+            val vd = handles[id] ?: return@synchronized null
+            val sink = sinks[id] ?: return@synchronized null
+            vd to sink.surface
+        }
+    }
+
+    override fun attachViewer(displayId: Int, surface: Surface, token: android.os.IBinder) =
+        viewers.attach(displayId, surface, token)
+
+    override fun detachViewer(displayId: Int): Boolean = viewers.detach(displayId)
+
     override fun createDisplay(spec: DisplaySpec): DisplayInfo {
         if (!capabilities.supportsFlags(spec.flags)) {
             throw SecurityException("unsupported flags 0x${Integer.toHexString(spec.flags)}")
@@ -205,6 +218,7 @@ class SystemDisplayEngine(
     override fun removeDisplay(displayId: Int) {
         val vd: VirtualDisplay
         val sink: ImageReader?
+        viewers.forget(displayId)
         synchronized(lock) {
             managed.remove(displayId) ?: throw IllegalArgumentException("display $displayId not managed")
             vd = handles.remove(displayId)
