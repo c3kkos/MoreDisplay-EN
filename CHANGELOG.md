@@ -10,6 +10,12 @@
   (`PARAMETER_KEY_REQUEST_SYNC_FRAME`) instead of relying on its own interval, and stamps frames with
   `System.nanoTime()`, the same clock as the cast sound.
 
+- **The eye froze when a cast started, and stayed frozen if the cast failed.** The eye now switches to the cast's
+  picture as soon as the cast takes the display, and when a cast stops or fails it gets the picture back from the
+  daemon (after the cast has released the display, so the hand-back can't detach the eye).
+- Live video could also produce no cast picture: frames were stamped with the virtual display's own timestamps,
+  and encoders drop frames whose timestamps don't increase. Frames are now stamped with `System.nanoTime()`.
+
 ### Added
 - **Cast error codes** `CAST-01` … `CAST-10` with details (frames from the display, drawn, encoded, key frames,
   segments, Chromecast requests), selectable in the app and explained in the README. The log prints the counters

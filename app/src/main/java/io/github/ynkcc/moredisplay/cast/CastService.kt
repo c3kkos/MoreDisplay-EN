@@ -78,8 +78,7 @@ class CastService : Service() {
                 if (config.keepAwake) keepAwake()
                 val cast = CastPipeline(this@CastService, displayId, info.spec.width, info.spec.height, config)
                 pipeline = cast
-                val url = cast.start()
-                cast.frameHub?.let { CastController.setHub(displayId, it) }
+                val url = cast.start { hub -> CastController.setHub(displayId, hub) }
                 CastController.connectAndPlay(
                     this@CastService, routeId, displayId, url,
                     onFailure = { fail(it) },
@@ -138,8 +137,10 @@ class CastService : Service() {
     private fun teardown() {
         val cast = pipeline
         pipeline = null
-        CastController.setHub(-1, null)
+        // Order matters: first give the display its sink back and release the hub, then tell an open eye that the
+        // hub is gone, so it re-attaches to the daemon afterwards (not before, or the detach would hit the eye).
         cast?.stop()
+        CastController.setHub(-1, null)
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
     }

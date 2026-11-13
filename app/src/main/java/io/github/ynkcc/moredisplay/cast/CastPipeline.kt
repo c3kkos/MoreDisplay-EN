@@ -81,8 +81,13 @@ class CastPipeline(
     /** The frame hub, for the eye to show the display while casting. */
     val frameHub: FrameHub? get() = hub
 
-    /** Starts everything and waits for the first segments. Returns the URL for the Chromecast. */
-    suspend fun start(): String {
+    /**
+     * Starts everything and waits for the first segments. Returns the URL for the Chromecast.
+     *
+     * [onHubAttached] runs as soon as the display's picture goes to the frame hub (before the wait), so an open
+     * eye can switch to the hub right away instead of freezing.
+     */
+    suspend fun start(onHubAttached: (FrameHub) -> Unit = {}): String {
         try {
             val address = localAddress(context)
                 ?: throw CastException(CastError.NO_WIFI, "connect the tablet to the same Wi-Fi as the Chromecast")
@@ -134,6 +139,7 @@ class CastPipeline(
                 throw CastException(CastError.DISPLAY_OUTPUT, "couldn't take display #$displayId's picture: ${it.message}", it)
             }
             hubAttached = true
+            onHubAttached(frames)
 
             server = HlsServer(segmenter, address).also { it.start() }
             withTimeoutOrNull(15_000) {
