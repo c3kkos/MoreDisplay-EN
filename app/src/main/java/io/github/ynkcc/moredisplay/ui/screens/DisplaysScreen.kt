@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -325,10 +326,14 @@ private fun DisplayCard(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "Display #${info.displayId}",
-                    style = MaterialTheme.typography.titleMedium
+                    info.spec.name.takeIf { it.isNotBlank() }
+                        ?.let { "Display #${info.displayId} · $it" }
+                        ?: "Display #${info.displayId}",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.weight(1f))
                 if (eyeVisible) {
                     IconButton(onClick = onEye) {
                         Icon(
@@ -349,7 +354,7 @@ private fun DisplayCard(
                 fontFamily = FontFamily.Monospace
             )
             Text(
-                "name=${info.spec.name}  flags=0x${Integer.toHexString(info.spec.flags)}",
+                "flags=0x${Integer.toHexString(info.spec.flags)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

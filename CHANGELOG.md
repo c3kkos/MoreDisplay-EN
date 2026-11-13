@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.1-EN (versionCode 9, English edition)
+
+### Changed
+- Display cards show the display's name in the title: "Display #2 · TV".
+- Version names now always have three numbers (1.5.1-EN), like the release tags.
+
 ## 1.5-EN (versionCode 8, English edition)
 
 ### Added
