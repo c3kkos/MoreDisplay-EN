@@ -262,6 +262,7 @@ Common `flags` values (add them together): `1` PUBLIC, `64` SUPPORTS_TOUCH,
 | An app still sees a hidden screen | Close and reopen that app; it may have cached the screen list. |
 | Recording redirect does nothing | Make sure the target virtual screen exists and has something running on it. |
 | Install fails over an older version | Uninstall the original MoreDisplay first (different signature). |
+| My first virtual screen is `#2`, not `#1` | Android picks the number, not MoreDisplay: each new display gets the next free number and numbers aren't reused until a restart. Something else used `#1` (see **Other displays** at the bottom of the Displays tab), or a screen was removed earlier. Always use the number shown in the app. |
 | The eye tile/widget says *No display* | Tap the eye on a display card once, so it knows which screen to show. |
 | The eye window is black | The app on that screen protects its content (DRM/secure), or nothing is drawn there yet. |
 | Setup not back after a reboot | Allow Autostart for MoreDisplay, or open the app and tap Connect. Displays made through Shizuku come back once Shizuku is running. |

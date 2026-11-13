@@ -63,11 +63,13 @@ fun handleRequest(
     is RpcRequest.SetDisplayPolicy -> {
         // Requirement B precondition: the recording redirect target display must actually exist, otherwise the mirror would point at a dead id.
         val recordId = request.policy.recordDisplayId
-        if (recordId != null && !DisplayQuery.rawDisplayIds().contains(recordId)) {
+        val existing = DisplayQuery.rawDisplayIds()
+        // An empty list means the platform query itself failed: don't block the policy on that.
+        if (recordId != null && existing.isNotEmpty() && recordId !in existing) {
             RpcResponse.Error(
                 request.id,
                 7,
-                "recordDisplayId=$recordId does not exist; create a managed display first (existing: ${DisplayQuery.rawDisplayIds()})"
+                "recordDisplayId=$recordId does not exist; create a managed display first (existing: $existing)"
             )
         } else {
             runCatching {

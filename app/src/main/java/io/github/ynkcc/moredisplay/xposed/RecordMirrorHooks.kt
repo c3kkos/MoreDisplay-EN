@@ -18,6 +18,9 @@ import java.util.concurrent.atomic.AtomicLong
  *   after `Binder.getCallingUid()`;
  * - ColorOS (tested on Android 16): 6 parameters, callingUid removed -- in that case read
  *   `Binder.getCallingUid()` before proceed (this point is before clearCallingIdentity, so the identity is still valid).
+ * - Android 12/12L: `(IVirtualDisplayCallback, IMediaProjection, int callingUid, String packageName, Surface,
+ *   int flags, VirtualDisplayConfig)` -- the config comes last and the flags are a separate argument.
+ * Arguments are therefore located by type, not by position.
  *
  * ## Why change `mDisplayIdToMirror` instead of swapping the Surface
  * The whole pipeline has a single source of truth for the mirror source: `VirtualDisplayConfig.mDisplayIdToMirror` (`PRIVATE FINAL int`). Its two observed consumers:
@@ -73,24 +76,20 @@ fun XposedModule.installRecordMirrorHooks(classLoader: ClassLoader) {
         mirrorField = configClass.getDeclaredField("mDisplayIdToMirror").apply { isAccessible = true }
         flagsField = configClass.getDeclaredField("mFlags").apply { isAccessible = true }
         val clz = classLoader.loadClass("com.android.server.display.DisplayManagerService")
-        // AOSP (Android 14+): 7 parameters, the last one is callingUid;
-        // ColorOS/others: 6 parameters (callingUid removed); in that case read Binder.getCallingUid() before proceed.
-        val method = clz.declaredMethods.firstOrNull {
-            it.name == "createVirtualDisplayInternal" &&
-                it.parameterTypes[0].name == "android.hardware.display.VirtualDisplayConfig" &&
-                (it.parameterCount == 7 && it.parameterTypes[6] == java.lang.Integer.TYPE ||
-                    it.parameterCount == 6)
+        val method = clz.declaredMethods.firstOrNull { m ->
+            m.name == "createVirtualDisplayInternal" &&
+                m.parameterTypes.any { it.name == VIRTUAL_DISPLAY_CONFIG }
         } ?: throw NoSuchMethodException(
-            "DisplayManagerService.createVirtualDisplayInternal(VirtualDisplayConfig,...)"
+            "DisplayManagerService.createVirtualDisplayInternal(..., VirtualDisplayConfig, ...)"
         )
-        val uidArgIndex = if (method.parameterCount == 7) 6 else -1
+        val args = CreateArgs.of(method.parameterTypes)
         hook(method).intercept { chain ->
-            val config = chain.getArg(0)
-            val uid = (uidArgIndex.takeIf { it >= 0 }?.let { chain.getArg(it) } as? Int)
+            val config = chain.getArg(args.config)
+            val uid = (args.uid.takeIf { it >= 0 }?.let { chain.getArg(it) } as? Int)
                 ?: Binder.getCallingUid()
             // After the elvis chain uid is always a non-null Int, so only config needs checking here
             if (config != null) {
-                runCatching { tryRedirectMirror(this, chain, config, uid) }
+                runCatching { tryRedirectMirror(chain, args, config, uid) }
                     .onFailure { Log.e(TAG, "mirror redirect failed uid=$uid", it) }
             }
             chain.proceed()
@@ -100,7 +99,7 @@ fun XposedModule.installRecordMirrorHooks(classLoader: ClassLoader) {
             Log.INFO,
             TAG,
             "hooked ${method.declaringClass.name}#${method.name}${method.parameterTypes.contentToString()} " +
-                "(params=${method.parameterCount}, mirrorField=${mirrorField != null}, flagsField=${flagsField != null})"
+                "(params=${method.parameterCount}, args=$args, mirrorField=${mirrorField != null}, flagsField=${flagsField != null})"
         )
     }.onFailure {
         recordHookInstalled = "false"
@@ -108,9 +107,42 @@ fun XposedModule.installRecordMirrorHooks(classLoader: ClassLoader) {
     }
 }
 
+private const val VIRTUAL_DISPLAY_CONFIG = "android.hardware.display.VirtualDisplayConfig"
+
+/** Where the interesting arguments of `createVirtualDisplayInternal` are on this Android version (-1 = absent). */
+private data class CreateArgs(
+    val config: Int,
+    val projection: Int,
+    val virtualDevice: Int,
+    val uid: Int,
+    val flags: Int
+) {
+    companion object {
+        fun of(types: Array<Class<*>>): CreateArgs {
+            val config = types.indexOfFirst { it.name == VIRTUAL_DISPLAY_CONFIG }
+            val configLast = config == types.lastIndex
+            val ints = types.indices.filter { types[it] == java.lang.Integer.TYPE }
+            return CreateArgs(
+                config = config,
+                projection = types.indexOfFirst { it.name == "android.media.projection.IMediaProjection" },
+                virtualDevice = types.indexOfFirst { it.name == "android.companion.virtual.IVirtualDevice" },
+                uid = when {
+                    // Android 12/12L: (callback, projection, callingUid, packageName, surface, flags, config)
+                    configLast -> ints.firstOrNull() ?: -1
+                    // Android 14+ AOSP: 7 parameters, callingUid last
+                    types.size == 7 && types[6] == java.lang.Integer.TYPE -> 6
+                    else -> -1
+                },
+                // Android 12/12L pass the flags separately (the second int); later versions keep them in the config
+                flags = if (configLast && ints.size >= 2) ints[1] else -1
+            )
+        }
+    }
+}
+
 private fun tryRedirectMirror(
-    module: XposedModule,
     chain: XposedInterface.Chain,
+    args: CreateArgs,
     config: Any,
     uid: Int
 ) {
@@ -118,10 +150,11 @@ private fun tryRedirectMirror(
     createHits.incrementAndGet()
 
     val field = mirrorField ?: throw IllegalStateException("mDisplayIdToMirror field not resolved")
-    val flags = (flagsField?.getInt(config)) ?: 0
+    val flags = (args.flags.takeIf { it >= 0 }?.let { chain.getArg(it) } as? Int)
+        ?: flagsField?.getInt(config) ?: 0
     val current = field.getInt(config)
-    val projection = chain.getArg(2)
-    val virtualDevice = chain.getArg(3)
+    val projection = args.projection.takeIf { it >= 0 }?.let { chain.getArg(it) }
+    val virtualDevice = args.virtualDevice.takeIf { it >= 0 }?.let { chain.getArg(it) }
 
     val mirroringDefault = current == DEFAULT_DISPLAY_ID
     val autoMirror = flags and VirtualDisplayFlags.AUTO_MIRROR != 0

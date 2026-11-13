@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicLong
  * **with no need to hook the target app's process at all**.
  *
  * ## Hook points (signatures verified with dexdump on a real device's services.jar, Android 16 / SDK 36)
- * 1. `DisplayManagerService$BinderService#getDisplayIds(Z)[I`
+ * 1. `DisplayManagerService$BinderService#getDisplayIds(Z)[I` (Android 14+; `getDisplayIds()[I` on Android 10-13)
  *    -- the binder entry apps use to get the list (`DisplayManager.getDisplays()` goes through it too).
  *    Observed: `Binder.getCallingUid()` -> `clearCallingIdentity()` -> `LogicalDisplayMapper.getDisplayIdsLocked(uid, includeDisabled)`.
  *    So `Binder.getCallingUid()` must be read **before** `chain.proceed()`, then the returned `int[]` is filtered.
@@ -74,12 +74,14 @@ fun XposedModule.installDisplayVisibilityHooks(classLoader: ClassLoader) {
 
 private fun XposedModule.hookBinderGetDisplayIds(classLoader: ClassLoader) = runCatching {
     val clz = classLoader.loadClass("com.android.server.display.DisplayManagerService\$BinderService")
+    // Android 14+: getDisplayIds(boolean includeDisabled); Android 10-13: getDisplayIds(). Both read the calling uid
+    // and then clear the calling identity, so the uid is read before proceed in either case.
     val method = clz.declaredMethods.firstOrNull {
         it.name == "getDisplayIds" &&
-            it.parameterCount == 1 &&
-            it.parameterTypes[0] == java.lang.Boolean.TYPE &&
-            it.returnType == IntArray::class.java
-    } ?: throw NoSuchMethodException("BinderService.getDisplayIds(Z)[I")
+            it.returnType == IntArray::class.java &&
+            (it.parameterCount == 0 ||
+                it.parameterCount == 1 && it.parameterTypes[0] == java.lang.Boolean.TYPE)
+    } ?: throw NoSuchMethodException("BinderService.getDisplayIds(Z)[I / getDisplayIds()[I")
     hook(method).intercept { chain ->
         // Must be read before proceed: the method calls clearCallingIdentity() internally.
         val callingUid = Binder.getCallingUid()
@@ -200,6 +202,8 @@ private fun XposedModule.hookCallbackNotifyDisplayEvent(classLoader: ClassLoader
             it.parameterTypes[0] == java.lang.Integer.TYPE &&
             it.parameterTypes[1] == java.lang.Integer.TYPE
     } ?: throw NoSuchMethodException("CallbackRecord.notifyDisplayEventAsync(II)Z")
+    // Android 14+ returns boolean (false = not delivered); Android 12/13 return void.
+    val swallowed: Any? = if (method.returnType == java.lang.Boolean.TYPE) false else null
     hook(method).intercept { chain ->
         val displayId = chain.getArg(0) as? Int
         val record = chain.thisObject
@@ -212,10 +216,10 @@ private fun XposedModule.hookCallbackNotifyDisplayEvent(classLoader: ClassLoader
             if (!DisplayPolicyRegistry.isVisible(uid, displayId)) {
                 val s = notifySuppressed.incrementAndGet()
                 Log.i(TAG, "EVENT notify-suppress uid=$uid displayId=$displayId (suppress#=$s)")
-                false
+                swallowed
             } else if (event != null && EyeSwapGate.shared.shouldSwallow(displayId, event, uid)) {
                 Log.i(TAG, "EVENT eye-swap swallow uid=$uid displayId=$displayId event=$event")
-                false
+                swallowed
             } else {
                 chain.proceed()
             }
@@ -235,7 +239,8 @@ private fun XposedModule.hookCallbackNotifyDisplayEvent(classLoader: ClassLoader
 private fun XposedModule.hookDeliverDisplayEventDiag(classLoader: ClassLoader) = runCatching {
     val clz = classLoader.loadClass("com.android.server.display.DisplayManagerService")
     val method = clz.declaredMethods.firstOrNull {
-        it.name == "deliverDisplayEvent" && it.parameterCount == 4
+        // 4 parameters on Android 14+, 3 (displayId, uids, event) on Android 12/13
+        it.name == "deliverDisplayEvent" && (it.parameterCount == 4 || it.parameterCount == 3)
     } ?: throw NoSuchMethodException("DisplayManagerService.deliverDisplayEvent(I,ArraySet,I,...)")
     hook(method).intercept { chain ->
         val displayId = chain.getArg(0) as? Int
