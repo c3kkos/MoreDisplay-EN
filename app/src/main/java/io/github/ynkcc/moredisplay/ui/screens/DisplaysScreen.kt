@@ -58,6 +58,7 @@ import io.github.ynkcc.moredisplay.core.Privilege
 import io.github.ynkcc.moredisplay.core.VirtualDisplayFlags
 import io.github.ynkcc.moredisplay.ui.BuiltInDisplay
 import io.github.ynkcc.moredisplay.ui.CreateHistoryStore
+import io.github.ynkcc.moredisplay.ui.OtherDisplay
 import io.github.ynkcc.moredisplay.ui.viewmodel.DisplaysViewModel
 import io.github.ynkcc.moredisplay.ui.viewmodel.label
 
@@ -100,6 +101,10 @@ fun DisplaysScreen(
 
     // The device's own screen (display 0) is always listed first as the default managed display.
     val builtIn = remember { BuiltInDisplay.query(context) }
+    // Displays that exist but aren't MoreDisplay's: they explain why a new display may not get the next number.
+    val otherDisplays = remember(byChannel) {
+        OtherDisplay.query(context, byChannel.values.flatten().map { it.displayId }.toSet())
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -168,6 +173,8 @@ fun DisplaysScreen(
                     item(key = "spacer-${channel.name}") { Spacer(Modifier.height(4.dp)) }
                 }
             }
+
+            item(key = "other-displays") { OtherDisplaysSection(otherDisplays) }
         }
     }
 
@@ -202,6 +209,38 @@ private fun BuiltInSectionHeader() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+/** Displays MoreDisplay doesn't manage, and why display numbers can skip. */
+@Composable
+private fun OtherDisplaysSection(others: List<OtherDisplay>) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text("Other displays", style = MaterialTheme.typography.titleSmall)
+        if (others.isEmpty()) {
+            Text("None right now.", style = MaterialTheme.typography.bodySmall)
+        } else {
+            others.forEach { d ->
+                val size = if (d.width > 0 && d.height > 0) "  ${d.width}×${d.height}" else ""
+                Text(
+                    "#${d.displayId}  ${d.name}$size",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
+        Text(
+            "Android numbers displays itself: each new display gets the next free number, and numbers are not " +
+                "reused until the device restarts. So a new display can skip a number that another app, the " +
+                "system, or a display removed earlier has used. Not managed by MoreDisplay; listed for reference.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

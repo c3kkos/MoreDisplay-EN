@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.4.1 (versionCode 6, English edition)
+
+### Fixed
+- **Android 10-13: saving a policy with a recording redirect failed with "display ... does not exist"**, even for a
+  display MoreDisplay had just created. The display-list query used `getDisplayIds(boolean)`, which only exists on
+  Android 14+, so on older versions it found no displays at all. Both forms are now supported.
+- **Android 10-13: whitelist/blacklist didn't apply to the display list apps get.** The hook on the system's
+  `getDisplayIds` had the same Android 14+ signature, so it wasn't installed on older versions (only the by-id check
+  was). It now installs on both.
+- **Android 12/12L: recording redirect wasn't installed.** On these versions `createVirtualDisplayInternal` takes its
+  arguments in a different order (the display config comes last). Arguments are now found by type.
+- Android 12/13: the display-event filter returned a value from a `void` method; it now returns correctly on both
+  forms.
+
+### Added
+- The Displays page lists **Other displays** (not managed by MoreDisplay) and explains display numbering: Android
+  hands out the numbers itself and never reuses one until a restart, so a new display can skip a number.
+
 ## 1.4 (versionCode 5, English edition)
 
 ### Added
