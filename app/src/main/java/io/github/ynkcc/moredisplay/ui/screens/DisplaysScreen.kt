@@ -393,6 +393,14 @@ private fun CreateDisplayDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                Text(
+                    "Note: Android picks the display number, not MoreDisplay. It may skip numbers " +
+                        "(e.g. the first one can be #2), because numbers used since the last restart, " +
+                        "by any app or by displays you removed, are not reused. Use the number shown " +
+                        "after creating it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 if (history.isNotEmpty()) {
                     // Recently used sizes, side by side; tap to fill in quickly.
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
