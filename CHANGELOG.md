@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.2-EN (versionCode 7, English edition)
+
+### Changed
+- **Easy to tell apart from the original in Vector's module list:** the app is now called **MoreDisplay EN**, the
+  version reads `1.4.2-EN`, and the description starts with "English edition by c3kkos, based on MoreDisplay by
+  ynkcc". (Vector shows the app name, version and description there.)
+- The create-display dialog notes that Android picks the display number and may skip numbers.
+
 ## 1.4.1 (versionCode 6, English edition)
 
 ### Fixed

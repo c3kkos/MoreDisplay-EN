@@ -73,10 +73,12 @@ open the latest run with a green check mark, scroll to **Artifacts** and downloa
 
 1. Install **Vector** and reboot.
 2. Install the **`MoreDisplay-<version>.apk`** you downloaded.
-3. Open the **Vector manager**, go to **Modules** and enable **MoreDisplay**.
+3. Open the **Vector manager**, go to **Modules** and enable **MoreDisplay EN**. It shows its version
+   (for example `1.4.2-EN`) and a description starting with *English edition*, so it can't be confused
+   with the original MoreDisplay.
 4. In the module's scope, tick **System Framework** only. Nothing else is needed.
 5. **Reboot** your phone.
-6. Open **MoreDisplay**. The **Home** tab should show the
+6. Open **MoreDisplay EN**. The **Home** tab should show the
    **Xposed / Vector (system_server)** channel as connected.
 
 ---
