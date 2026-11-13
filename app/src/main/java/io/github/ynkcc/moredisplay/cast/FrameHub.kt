@@ -24,10 +24,15 @@ import java.util.concurrent.TimeUnit
  * the video encoder (with each frame's timestamp) and, optionally, the eye window. This is what lets casting and
  * the eye run at the same time.
  *
+ * A virtual display only sends a frame when its content changes, and many encoders don't repeat the last frame by
+ * themselves. So the hub keeps a steady frame rate ([fps]): when nothing new arrived within one frame interval it
+ * draws the latest picture again (black until the first one). Timestamps come from `System.nanoTime()`, the same
+ * clock as the cast sound.
+ *
  * All GL work happens on one thread. [setOutput] and [release] wait for it, so a caller can safely let a surface
  * go right after removing it.
  */
-class FrameHub(private val width: Int, private val height: Int) {
+class FrameHub(private val width: Int, private val height: Int, private val fps: Int = 30) {
 
     companion object {
         private const val TAG = "MoreDisplay_FrameHub"
@@ -67,6 +72,27 @@ class FrameHub(private val width: Int, private val height: Int) {
     private val texMatrix = FloatArray(16)
     private val outputs = LinkedHashMap<String, Output>()
     private var released = false
+    private var hasPicture = false
+    private var lastDrawNs = 0L
+    private val intervalNs = 1_000_000_000L / fps.coerceIn(1, 120)
+
+    /** Frames received from the display (diagnostics). */
+    @Volatile
+    var framesIn = 0L
+        private set
+
+    /** Frames drawn into the outputs, repeats included (diagnostics). */
+    @Volatile
+    var framesDrawn = 0L
+        private set
+
+    private val ticker = object : Runnable {
+        override fun run() {
+            if (released) return
+            if (System.nanoTime() - lastDrawNs >= intervalNs) drawOutputs()
+            handler.postDelayed(this, (intervalNs / 1_000_000L).coerceAtLeast(5))
+        }
+    }
 
     private val quad: FloatBuffer = floatBuffer(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f)
     private val texCoords: FloatBuffer = floatBuffer(0f, 0f, 1f, 0f, 0f, 1f, 1f, 1f)
@@ -88,9 +114,10 @@ class FrameHub(private val width: Int, private val height: Int) {
         GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
         surfaceTexture = SurfaceTexture(texture).apply {
             setDefaultBufferSize(width, height)
-            setOnFrameAvailableListener({ drawFrame() }, handler)
+            setOnFrameAvailableListener({ onDisplayFrame() }, handler)
         }
         inputSurface = Surface(surfaceTexture)
+        handler.post(ticker)
     }
 
     /**
@@ -113,6 +140,7 @@ class FrameHub(private val width: Int, private val height: Int) {
     fun release() {
         runOnGl {
             released = true
+            handler.removeCallbacks(ticker)
             outputs.values.forEach { EGL14.eglDestroySurface(display, it.surface) }
             outputs.clear()
             if (::surfaceTexture.isInitialized) {
@@ -131,22 +159,38 @@ class FrameHub(private val width: Int, private val height: Int) {
         thread.quitSafely()
     }
 
-    private fun drawFrame() {
+    private fun onDisplayFrame() {
         if (released) return
         EGL14.eglMakeCurrent(display, idle, idle, context)
         surfaceTexture.updateTexImage()
         surfaceTexture.getTransformMatrix(texMatrix)
-        val timestamp = surfaceTexture.timestamp
+        hasPicture = true
+        framesIn++
+        drawOutputs()
+    }
+
+    private fun drawOutputs() {
+        if (released || outputs.isEmpty()) return
+        val now = System.nanoTime()
+        // Strictly increasing timestamps, as encoders require.
+        val timestamp = if (now > lastDrawNs) now else lastDrawNs + 1
+        lastDrawNs = timestamp
         for (out in outputs.values) {
             if (!EGL14.eglMakeCurrent(display, out.surface, out.surface, context)) continue
             val size = IntArray(2)
             EGL14.eglQuerySurface(display, out.surface, EGL14.EGL_WIDTH, size, 0)
             EGL14.eglQuerySurface(display, out.surface, EGL14.EGL_HEIGHT, size, 1)
             GLES20.glViewport(0, 0, size[0], size[1])
-            draw()
+            if (hasPicture) {
+                draw()
+            } else {
+                GLES20.glClearColor(0f, 0f, 0f, 1f)
+                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+            }
             if (out.timestamps) EGLExt.eglPresentationTimeANDROID(display, out.surface, timestamp)
             EGL14.eglSwapBuffers(display, out.surface)
         }
+        framesDrawn++
         EGL14.eglMakeCurrent(display, idle, idle, context)
     }
 

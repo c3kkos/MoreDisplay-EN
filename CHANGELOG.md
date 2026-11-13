@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.1-EN (versionCode 12, English edition)
+
+### Fixed
+- **Cast failed with "The video encoder produced no picture".** A virtual display only sends a frame when its
+  content changes, and many encoders ignore the "repeat the last frame" setting, so a still screen gave the encoder
+  one frame and the stream never got its 1-second segments. The frame hub now keeps a steady frame rate (repeating
+  the latest picture, black until the first one), asks the encoder for a key frame every second
+  (`PARAMETER_KEY_REQUEST_SYNC_FRAME`) instead of relying on its own interval, and stamps frames with
+  `System.nanoTime()`, the same clock as the cast sound.
+
+### Added
+- **Cast error codes** `CAST-01` … `CAST-10` with details (frames from the display, drawn, encoded, key frames,
+  segments, Chromecast requests), selectable in the app and explained in the README. The log prints the counters
+  every 10 s while casting, and the cast stops with `CAST-08` if the Chromecast hasn't fetched anything 30 s after
+  being told to play.
+
 ## 1.7.0-EN (versionCode 11, English edition)
 
 ### Added

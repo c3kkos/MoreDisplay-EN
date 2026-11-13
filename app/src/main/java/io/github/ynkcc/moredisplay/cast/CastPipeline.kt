@@ -59,6 +59,19 @@ class CastPipeline(
     private var audio: AudioEncoder? = null
     private var server: HlsServer? = null
     private var hubAttached = false
+    private var segmenter: HlsSegmenter? = null
+
+    /** Requests the Chromecast made to the stream server so far. */
+    val streamRequests: Int get() = server?.requests ?: 0
+
+    /**
+     * Where the picture got to, for error messages and the log: frames from the display, frames drawn into the
+     * encoder (repeats included), frames and key frames encoded, finished segments, Chromecast requests.
+     */
+    fun diagnostics(): String =
+        "display frames ${hub?.framesIn ?: 0}, drawn ${hub?.framesDrawn ?: 0}, " +
+            "encoded ${video?.encodedFrames ?: 0}, key frames ${video?.keyFrames ?: 0}, " +
+            "segments ${segmenter?.ready() ?: 0}, requests ${server?.requests ?: 0}"
     private var soundOn = false
 
     /** Why there's no sound on the TV, if there isn't. */
@@ -72,7 +85,7 @@ class CastPipeline(
     suspend fun start(): String {
         try {
             val address = localAddress(context)
-                ?: throw IllegalStateException("Connect the tablet to the same Wi-Fi as the Chromecast")
+                ?: throw CastException(CastError.NO_WIFI, "connect the tablet to the same Wi-Fi as the Chromecast")
             val repo = App.displays()
 
             // Sound first: it decides whether the stream has an audio track.
@@ -93,27 +106,40 @@ class CastPipeline(
                 soundNote = "Sound is turned off in Settings → Cast"
             }
 
-            val segmenter = HlsSegmenter(hasAudio = pcmIn != null)
-            val encoder = VideoEncoder(width, height, config.bitrateFor(width, height), config.fps) { data, pts, key ->
-                segmenter.video(data, pts, key)
+            val segmenter = HlsSegmenter(hasAudio = pcmIn != null).also { this.segmenter = it }
+            val bitrate = config.bitrateFor(width, height)
+            val encoder = try {
+                VideoEncoder(width, height, bitrate, config.fps) { data, pts, key -> segmenter.video(data, pts, key) }
+                    .also { it.start() }
+            } catch (e: Exception) {
+                throw CastException(
+                    CastError.ENCODER_START,
+                    "the video encoder refused ${width}x$height @ ${config.fps} fps, ${bitrate / 1_000} kbit/s " +
+                        "(${e.javaClass.simpleName}: ${e.message})", e
+                )
             }
             video = encoder
             audio = pcmIn?.let { pfd -> AudioEncoder(pfd) { frame, pts -> segmenter.audio(frame, pts) } }
-
-            val frames = FrameHub(width, height).also { hub = it }
-            frames.start()
-            frames.setOutput("encoder", encoder.inputSurface, timestamps = true)
-            encoder.start()
             audio?.start()
 
-            repo.attachViewer(displayId, frames.inputSurface, token).getOrThrow()
+            val frames = FrameHub(width, height, config.fps).also { hub = it }
+            try {
+                frames.start()
+                frames.setOutput("encoder", encoder.inputSurface, timestamps = true)
+            } catch (e: Exception) {
+                throw CastException(CastError.GPU, "the picture copier (OpenGL) failed: ${e.message}", e)
+            }
+
+            repo.attachViewer(displayId, frames.inputSurface, token).onFailure {
+                throw CastException(CastError.DISPLAY_OUTPUT, "couldn't take display #$displayId's picture: ${it.message}", it)
+            }
             hubAttached = true
 
             server = HlsServer(segmenter, address).also { it.start() }
             withTimeoutOrNull(15_000) {
                 while (segmenter.ready() < 2) delay(100)
-            } ?: throw IllegalStateException("The video encoder produced no picture")
-            Log.i(TAG, "display $displayId: ${encoder.width}x${encoder.height} streaming at ${server!!.playlistUrl}")
+            } ?: throw CastException(CastError.NO_PICTURE, "no video after 15 s (${diagnostics()})")
+            Log.i(TAG, "display $displayId: ${encoder.width}x${encoder.height} streaming at ${server!!.playlistUrl} (${diagnostics()})")
             return server!!.playlistUrl
         } catch (e: Throwable) {
             stop()

@@ -329,11 +329,31 @@ Common `flags` values (add them together): `1` PUBLIC, `64` SUPPORTS_TOUCH,
 | Cast: *Connect the tablet to the same Wi-Fi* | The tablet and the Chromecast must be on the same Wi-Fi network. |
 | Cast: the TV shows an error or stays loading | Check that the tablet and the Chromecast are on the same network and that no VPN or "client isolation" (common on guest Wi-Fi) blocks them from talking to each other. |
 | Cast: no sound on the TV | Sound needs the Vector channel and an app set to *Open on* the cast screen. Some apps forbid sound capture. |
+| Cast error with a `CAST-xx` code | See *Cast error codes* below. |
 | The eye tile/widget says *No display* | Tap the eye on a display card once, so it knows which screen to show. |
 | The eye window is black | The app on that screen protects its content (DRM/secure), or nothing is drawn there yet. |
 | Setup not back after a reboot | Allow Autostart for MoreDisplay, or open the app and tap Connect. Displays made through Shizuku come back once Shizuku is running. |
 
 ---
+
+### Cast error codes
+
+When a cast fails, the Displays tab shows a code and what was found (you can select and copy it). The
+same line is in the log under the tag `MoreDisplay_Cast`, which also prints the cast's counters every
+10 seconds while casting.
+
+| Code | Meaning | What to check |
+| --- | --- | --- |
+| `CAST-01` | No Wi-Fi address | Connect the tablet to Wi-Fi (the same network as the Chromecast). |
+| `CAST-02` | The video encoder couldn't start | Try a lower quality or 30 fps in Settings → Cast, or a smaller display (e.g. 1280×720). |
+| `CAST-03` | The picture copier (OpenGL) failed | Report it with the details. |
+| `CAST-04` | The display's picture couldn't be taken | Make sure the display still exists and the channel (Vector/Shizuku) is connected. |
+| `CAST-05` | No video was produced | The details give the counters: `display frames 0` = the display sent nothing; `encoded 0` = the encoder produced nothing; few `key frames` = the encoder ignores key-frame requests. Report it with the details. |
+| `CAST-06` | Couldn't connect to the Cast device | Is the Chromecast on and on the same network? Try again; the details include Google's Cast status number. |
+| `CAST-07` | The Chromecast couldn't play the stream | Report it with the Cast status number in the details. |
+| `CAST-08` | The Chromecast never reached the tablet | The two can't talk to each other: same network? No VPN on the tablet? Guest Wi-Fi often isolates devices. |
+| `CAST-09` | The display to cast doesn't exist | Pick an existing display in Settings → Cast. |
+| `CAST-10` | Cast isn't available | Google Play services are needed on the tablet. |
 
 ## Build from source
 
