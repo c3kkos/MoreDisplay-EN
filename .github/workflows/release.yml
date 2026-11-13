@@ -71,10 +71,32 @@ jobs:
         run: |
           set -euo pipefail
           TAG="$RELEASE_TAG"
-          gh release create "$TAG" \
-            --title "${{ steps.ver.outputs.version_name }}" \
-            --generate-notes \
-            out/*.apk
+          VERSION="${{ steps.ver.outputs.version_name }}"
+          TITLE="MoreDisplay $VERSION (English edition)"
+          # Every release page credits the original author and says how to install.
+          cat > out/notes-header.md <<EOF
+          English edition of MoreDisplay. **All credit goes to ynkcc, the original author:** https://github.com/ynkcc/MoreDisplay
+
+          **Install:** download \`MoreDisplay-$VERSION.apk\` below and install it (it updates an older version in place), then reboot.
+          First install: enable it in the Vector manager with the **System Framework** scope and reboot.
+          What changed in this version: [CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/CHANGELOG.md).
+
+          EOF
+          sed -i 's/^          //' out/notes-header.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # Re-running for an existing tag refreshes its page and files instead of failing.
+            gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$TAG" --jq .body \
+              > out/generated.md || : > out/generated.md
+            cat out/notes-header.md out/generated.md > out/notes-full.md
+            gh release edit "$TAG" --title "$TITLE" --notes-file out/notes-full.md
+            gh release upload "$TAG" out/*.apk --clobber
+          else
+            gh release create "$TAG" \
+              --title "$TITLE" \
+              --notes-file out/notes-header.md \
+              --generate-notes \
+              out/*.apk
+          fi
           gh release view "$TAG" --json body --jq .body > out/release-notes.md
 
       - name: Upload release notes
