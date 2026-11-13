@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import io.github.ynkcc.moredisplay.core.DisplayPolicy
 import io.github.ynkcc.moredisplay.core.IDisplayRepository
 import io.github.ynkcc.moredisplay.core.Visibility
+import io.github.ynkcc.moredisplay.core.OrientationOverride
 
 /** App picker entry: label / package name / uid fetched together; the icon is loaded lazily in the UI layer. */
 data class AppEntry(
@@ -79,8 +80,8 @@ class PoliciesViewModel(
         operatedDisplayId: Int?,
         recordDisplayId: Int?,
         launchDisplayId: Int? = null,
-        orientation: io.github.ynkcc.moredisplay.core.OrientationOverride =
-            io.github.ynkcc.moredisplay.core.OrientationOverride.APP
+        orientation: OrientationOverride =
+            OrientationOverride.APP
     ) {
         viewModelScope.launch {
             _busy.value = true

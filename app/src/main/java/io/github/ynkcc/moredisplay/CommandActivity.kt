@@ -4,12 +4,22 @@ import android.app.Activity
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.runBlocking
 import io.github.ynkcc.moredisplay.core.DisplayPolicy
 import io.github.ynkcc.moredisplay.core.DisplaySpec
 import io.github.ynkcc.moredisplay.core.Visibility
 import java.util.concurrent.Executors
+import io.github.ynkcc.moredisplay.eye.EyeControl
+import io.github.ynkcc.moredisplay.eye.EyeSettings
+import io.github.ynkcc.moredisplay.eye.EyeRequest
+import io.github.ynkcc.moredisplay.eye.ViewerController
+import io.github.ynkcc.moredisplay.cast.CastController
+import io.github.ynkcc.moredisplay.cast.CastSettings
+import io.github.ynkcc.moredisplay.core.OrientationOverride
 
 class CommandActivity : Activity() {
 
@@ -163,7 +173,7 @@ class CommandActivity : Activity() {
                     operatedDisplayId = intent.getIntExtra(EXTRA_OPERATED_DISPLAY_ID, -1).takeIf { it >= 0 },
                     recordDisplayId = intent.getIntExtra(EXTRA_RECORD_DISPLAY_ID, -1).takeIf { it >= 0 },
                     launchDisplayId = intent.getIntExtra(EXTRA_LAUNCH_DISPLAY_ID, -1).takeIf { it >= 0 },
-                    orientation = io.github.ynkcc.moredisplay.core.OrientationOverride.fromName(
+                    orientation = OrientationOverride.fromName(
                         intent.getStringExtra(EXTRA_ORIENTATION)
                     )
                 )
@@ -218,7 +228,7 @@ class CommandActivity : Activity() {
                     rikka.shizuku.Shizuku.addRequestPermissionResultListener(listener)
                     try {
                         rikka.shizuku.Shizuku.requestPermission(100)
-                        val granted = kotlinx.coroutines.withTimeoutOrNull(30_000) { result.await() }
+                        val granted = withTimeoutOrNull(30_000) { result.await() }
                         when {
                             granted == null -> "shizuku permission request timed out (dialog dismissed?)"
                             granted == android.content.pm.PackageManager.PERMISSION_GRANTED ->
@@ -231,14 +241,14 @@ class CommandActivity : Activity() {
                 }
             }
             ACTION_EYE -> {
-                val eye = io.github.ynkcc.moredisplay.eye.EyeControl.ADB
-                require(io.github.ynkcc.moredisplay.eye.EyeSettings.isEnabled(eye)) {
+                val eye = EyeControl.ADB
+                require(EyeSettings.isEnabled(eye)) {
                     "the eye adb command is turned off in MoreDisplay → Settings"
                 }
-                val request = io.github.ynkcc.moredisplay.eye.EyeRequest.parse(intent.getStringExtra(EXTRA_STATE))
+                val request = EyeRequest.parse(intent.getStringExtra(EXTRA_STATE))
                     ?: throw IllegalArgumentException("--es state must be on, off or toggle")
                 val explicit = intent.getIntExtra(EXTRA_DISPLAY_ID, -1).takeIf { it >= 0 }
-                val controller = io.github.ynkcc.moredisplay.eye.ViewerController
+                val controller = ViewerController
                 val target = if (explicit != null) {
                     require(explicit in controller.managedIds()) { "display $explicit is not managed by MoreDisplay" }
                     explicit
@@ -249,7 +259,7 @@ class CommandActivity : Activity() {
                 controller.apply(this@CommandActivity, request, target)
             }
             ACTION_CAST -> {
-                val cast = io.github.ynkcc.moredisplay.cast.CastController
+                val cast = CastController
                 when (intent.getStringExtra(EXTRA_STATE)?.lowercase() ?: "on") {
                     "off", "0", "false" -> {
                         cast.stop(this@CommandActivity)
@@ -257,21 +267,21 @@ class CommandActivity : Activity() {
                     }
                     "on", "1", "true" -> {
                         val displayId = intent.getIntExtra(EXTRA_DISPLAY_ID, -1).takeIf { it >= 0 }
-                            ?: io.github.ynkcc.moredisplay.cast.CastSettings.current().displayId
+                            ?: CastSettings.current().displayId
                         require(displayId >= 0) { "no display to cast: pass --ei display_id N or set it in Settings → Cast" }
-                        val routeId = io.github.ynkcc.moredisplay.cast.CastSettings.lastDeviceId()
+                        val routeId = CastSettings.lastDeviceId()
                             ?: throw IllegalArgumentException("no Cast device used yet: cast once from the app first")
                         val app = applicationContext
                         // Device discovery runs on the main thread; give it up to 15 s to find the last device.
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { cast.startDiscovery(app) }
-                        val device = kotlinx.coroutines.withTimeoutOrNull(15_000) {
+                        withContext(Dispatchers.Main) { cast.startDiscovery(app) }
+                        val device = withTimeoutOrNull(15_000) {
                             cast.devices.first { list -> list.any { it.id == routeId } }.first { it.id == routeId }
                         }
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { cast.stopDiscovery(app) }
+                        withContext(Dispatchers.Main) { cast.stopDiscovery(app) }
                         device ?: throw IllegalStateException(
-                            "${io.github.ynkcc.moredisplay.cast.CastSettings.lastDeviceName() ?: "the last Cast device"} wasn't found on the network"
+                            "${CastSettings.lastDeviceName() ?: "the last Cast device"} wasn't found on the network"
                         )
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        withContext(Dispatchers.Main) {
                             cast.start(this@CommandActivity, device, displayId)
                         }
                         "casting display $displayId to ${device.name}"

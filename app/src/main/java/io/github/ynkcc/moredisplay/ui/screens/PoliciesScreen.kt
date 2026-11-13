@@ -46,6 +46,7 @@ import io.github.ynkcc.moredisplay.core.Visibility
 import io.github.ynkcc.moredisplay.ui.viewmodel.PoliciesViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import io.github.ynkcc.moredisplay.core.OrientationOverride
 
 /** List polling interval (ms), same as the Displays page. */
 private const val REFRESH_INTERVAL_MS = 3000L
@@ -243,7 +244,7 @@ private fun PolicyCard(
             }
             val extras = listOfNotNull(
                 policy.launchDisplayId?.let { "Opens on #$it" },
-                policy.orientation.takeIf { it == io.github.ynkcc.moredisplay.core.OrientationOverride.LANDSCAPE }
+                policy.orientation.takeIf { it == OrientationOverride.LANDSCAPE }
                     ?.let { "Landscape" },
                 policy.recordDisplayId?.let { "Recording->#$it" },
                 policy.operatedDisplayId?.let { "A11y->#$it" }

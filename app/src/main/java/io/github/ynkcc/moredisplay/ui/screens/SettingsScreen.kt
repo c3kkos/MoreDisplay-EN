@@ -36,6 +36,7 @@ import io.github.ynkcc.moredisplay.core.DisplayInfo
 import io.github.ynkcc.moredisplay.eye.EyeControl
 import io.github.ynkcc.moredisplay.eye.EyeSettings
 import io.github.ynkcc.moredisplay.eye.ViewerController
+import androidx.compose.ui.text.font.FontFamily
 
 /** Settings: one switch per eye control. */
 @Composable
@@ -117,7 +118,7 @@ fun SettingsScreen() {
                     "adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity " +
                         "--es action eye --ei display_id 2 --es state toggle",
                     style = MaterialTheme.typography.bodySmall,
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                    fontFamily = FontFamily.Monospace
                 )
                 Text(
                     "state: on, off or toggle (default). Without display_id, the last watched display is used.",

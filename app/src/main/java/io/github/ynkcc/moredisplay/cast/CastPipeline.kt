@@ -78,8 +78,6 @@ class CastPipeline(
     var soundNote: String? = null
         private set
 
-    /** The frame hub, for the eye to show the display while casting. */
-    val frameHub: FrameHub? get() = hub
 
     /**
      * Starts everything and waits for the first segments. Returns the URL for the Chromecast.
