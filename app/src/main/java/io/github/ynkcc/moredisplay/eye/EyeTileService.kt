@@ -17,7 +17,7 @@ class EyeTileService : TileService() {
         /** Asks the system to refresh the tile (it only redraws while the shade is open). */
         fun requestUpdate(context: Context) {
             runCatching {
-                requestListeningState(context, ComponentName(context, EyeTileService::class.java))
+                TileService.requestListeningState(context, ComponentName(context, EyeTileService::class.java))
             }
         }
     }

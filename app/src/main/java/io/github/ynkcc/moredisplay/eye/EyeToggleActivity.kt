@@ -31,7 +31,7 @@ class EyeToggleActivity : ComponentActivity() {
             ?: EyeControl.WIDGET
 
         if (!EyeSettings.isEnabled(source)) {
-            toast("The eye ${source.label.lowercase()} is turned off in MoreDisplay → Settings")
+            toast("\"${source.label}\" is turned off in MoreDisplay → Settings")
             finish()
             return
         }
