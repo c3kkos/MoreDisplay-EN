@@ -142,7 +142,8 @@ fun PoliciesScreen(
                     visibility = policy.visibility,
                     displayIds = policy.displayIds,
                     operatedDisplayId = policy.operatedDisplayId,
-                    recordDisplayId = policy.recordDisplayId
+                    recordDisplayId = policy.recordDisplayId,
+                    launchDisplayId = policy.launchDisplayId
                 )
             },
             onDelete = editing?.let { policy ->
@@ -240,6 +241,7 @@ private fun PolicyCard(
                 }
             }
             val extras = listOfNotNull(
+                policy.launchDisplayId?.let { "Opens on #$it" },
                 policy.recordDisplayId?.let { "Recording->#$it" },
                 policy.operatedDisplayId?.let { "A11y->#$it" }
             ).joinToString("  ")

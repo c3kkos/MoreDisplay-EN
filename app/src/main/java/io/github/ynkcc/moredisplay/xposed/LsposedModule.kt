@@ -51,8 +51,9 @@ class LsposedModule : XposedModule() {
         installRecordMirrorHooks(param.classLoader)
         installAccessibilityRedirectHooks(param.classLoader)
         hookRecentsGate(param.classLoader)
+        installLaunchRedirectHooks(param.classLoader)
         DisplayPolicyRegistry.statsProvider = {
-            "${visibilityHookStats()} | ${recordMirrorHookStats()} | ${accessibilityHookStats()}"
+            "${visibilityHookStats()} | ${recordMirrorHookStats()} | ${accessibilityHookStats()} | ${launchRedirectHookStats()}"
         }
     }
 
@@ -199,12 +200,12 @@ class LsposedModule : XposedModule() {
         }.onFailure { log(Log.ERROR, TAG, "hookRecentsGate failed", it) }
     }
 
-    private fun hookLaunchPermission(classLoader: ClassLoader) {        val supervisor = when {
-            android.os.Build.VERSION.SDK_INT >= 31 -> "com.android.server.wm.ActivityTaskSupervisor"
-            else -> null
-        } ?: run {
-            log(Log.INFO, TAG, "launch permission hook skipped for sdk=${android.os.Build.VERSION.SDK_INT}")
-            return
+    private fun hookLaunchPermission(classLoader: ClassLoader) {
+        // Renamed in Android 12; Android 10/11 have the same method on ActivityStackSupervisor.
+        val supervisor = if (android.os.Build.VERSION.SDK_INT >= 31) {
+            "com.android.server.wm.ActivityTaskSupervisor"
+        } else {
+            "com.android.server.wm.ActivityStackSupervisor"
         }
         runCatching {
             val clz = classLoader.loadClass(supervisor)

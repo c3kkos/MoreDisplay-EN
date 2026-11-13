@@ -42,7 +42,8 @@ data class SavedPolicy(
     val visibility: Visibility,
     val displays: Set<DisplayRef>,
     val operated: DisplayRef?,
-    val record: DisplayRef?
+    val record: DisplayRef?,
+    val launch: DisplayRef? = null
 )
 
 data class SavedState(
@@ -69,7 +70,8 @@ data class SavedState(
                 p.copy(
                     displays = p.displays.filter { keep(it) }.toSet(),
                     operated = p.operated?.takeIf { keep(it) },
-                    record = p.record?.takeIf { keep(it) }
+                    record = p.record?.takeIf { keep(it) },
+                    launch = p.launch?.takeIf { keep(it) }
                 )
             },
             initialized = true
@@ -84,7 +86,8 @@ data class SavedState(
             visibility = policy.visibility,
             displays = policy.displayIds.map { refFor(it) }.toSet(),
             operated = policy.operatedDisplayId?.let { refFor(it) },
-            record = policy.recordDisplayId?.let { refFor(it) }
+            record = policy.recordDisplayId?.let { refFor(it) },
+            launch = policy.launchDisplayId?.let { refFor(it) }
         )
         return copy(policies = policies.filter { it.uid != policy.uid } + saved, initialized = true)
     }
@@ -143,7 +146,8 @@ data class SavedState(
                 visibility = p.visibility,
                 displayIds = p.displays.mapNotNull { resolve(it) }.toSet(),
                 operatedDisplayId = resolve(p.operated),
-                recordDisplayId = resolve(p.record)
+                recordDisplayId = resolve(p.record),
+                launchDisplayId = resolve(p.launch)
             )
         }
     }
@@ -166,7 +170,8 @@ data class SavedState(
                     "P", p.uid, enc(p.packageName ?: ""), p.visibility.name,
                     p.displays.joinToString(",") { refString(it) },
                     p.operated?.let { refString(it) } ?: "",
-                    p.record?.let { refString(it) } ?: ""
+                    p.record?.let { refString(it) } ?: "",
+                    p.launch?.let { refString(it) } ?: ""
                 ).joinToString("|")
             )
         }
@@ -198,7 +203,8 @@ data class SavedState(
                             visibility = Visibility.fromName(f[3]),
                             displays = f[4].split(',').mapNotNull { parseRef(it) }.toSet(),
                             operated = parseRef(f[5]),
-                            record = parseRef(f[6])
+                            record = parseRef(f[6]),
+                            launch = parseRef(f.getOrNull(7)) // absent in files saved before 1.5
                         )
                     }
                 } // a corrupt line is skipped instead of losing everything

@@ -24,7 +24,7 @@ With MoreDisplay you can:
 
 | You want to... | MoreDisplay feature |
 | --- | --- |
-| Run an app on a hidden extra screen | **Managed displays**: create, list and remove virtual screens |
+| Run an app on a hidden extra screen | **Managed displays** + **Open on**: the app always opens on the virtual screen, never on yours |
 | Stop an app from noticing the extra screens | **Per-app visibility**: hide screens from an app (blacklist) or show it only some screens (whitelist) |
 | Make an app's screen recording capture a virtual screen instead of your real one | **Recording redirect** |
 | Make an accessibility app (auto-clicker, macro tool) tap on a virtual screen instead of your real one | **Accessibility redirect** |
@@ -130,11 +130,19 @@ Rules that decide what a specific app can see or where it acts.
    - **Blacklist**: the app cannot see the screens you tick
 
    The built-in screen (`#0`) is shown as a locked chip: it is always visible to every app.
-4. **Recording redirect** (optional): pick a virtual screen (`#0 Built-in` means no redirect). When this app records the screen,
+4. **Open on** (optional): the screen this app always opens on, however it's started (home screen
+   icon, notification, another app). Pick a virtual screen to keep the app off your real screen, then
+   watch it with the eye. If the app was already open, close it from Recents once.
+   Visibility alone does **not** move an app: it only decides which screens the app can *see*.
+5. **Recording redirect** (optional): pick a virtual screen (`#0 Built-in` means no redirect). When this app records the screen,
    it will record that virtual screen instead.
-5. **Accessibility redirect** (optional): pick a virtual screen. Taps and swipes performed by this
+6. **Accessibility redirect** (optional): pick a virtual screen. Taps and swipes performed by this
    app's accessibility service will land on that virtual screen.
-6. Tap **Save**. Rules take effect immediately, no reboot needed.
+7. Tap **Save**. Rules take effect immediately, no reboot needed.
+
+**Example: hide an app on screen #2 and watch it.** Add a policy for the app with **Whitelist only**
+→ tick `#2`, and **Open on** → `#2`. Launch the app from your home screen as usual: it opens on #2
+and nothing appears on your screen. Tap the eye to watch it.
 
 ### 4. Settings
 
@@ -221,6 +229,10 @@ adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action r
 adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
   --es action policy-set --es target_package com.example.app --es mode hide --eia display_ids 2
 
+# Always open an app on screen 2 (and let it see only screen 2)
+adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
+  --es action policy-set --es target_package com.example.app --es mode only --eia display_ids 2 --ei launch_display_id 2
+
 # Make an app's screen recordings capture screen 2
 adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
   --es action policy-set --es target_package com.example.app --es mode all --ei record_display_id 2
@@ -243,7 +255,7 @@ adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
 | `list` | List virtual screens | |
 | `remove` | Delete a virtual screen | `display_id` |
 | `hold` | Check that a virtual screen is still managed and alive | `display_id` |
-| `policy-set` | Add or replace a rule | `target_package` or `uid`, `mode` (`all` / `only` / `hide`), `display_ids`, `record_display_id`, `operated_display_id` |
+| `policy-set` | Add or replace a rule | `target_package` or `uid`, `mode` (`all` / `only` / `hide`), `display_ids`, `launch_display_id`, `record_display_id`, `operated_display_id` |
 | `policy-list` | Show all rules | |
 | `policy-remove` | Delete a rule | `target_package` or `uid` |
 | `displays-for-uid` | Which screens an app can see | `target_package` or `uid` |

@@ -32,14 +32,20 @@ data class DisplayPolicy(
     val visibility: Visibility = Visibility.ALL,
     val displayIds: Set<Int> = emptySet(),
     val operatedDisplayId: Int? = null,
-    val recordDisplayId: Int? = null
+    val recordDisplayId: Int? = null,
+    /**
+     * "Open on": every activity of this app is started on this display instead of the one the launcher (or the
+     * notification, ...) asked for. Null = Android decides as usual.
+     */
+    val launchDisplayId: Int? = null
 ) {
     fun describe(): String {
         val target = packageName?.let { "$it($uid)" } ?: "uid=$uid"
         val ids = displayIds.sorted().joinToString(",")
         val extras = listOfNotNull(
             recordDisplayId?.let { "record=$it" },
-            operatedDisplayId?.let { "operated=$it" }
+            operatedDisplayId?.let { "operated=$it" },
+            launchDisplayId?.let { "launch=$it" }
         )
         val suffix = if (extras.isEmpty()) "" else " " + extras.joinToString(" ")
         return "$target ${visibility.name}[$ids]$suffix"

@@ -75,4 +75,23 @@ class SavedStateTest {
         assertEquals(null, p.record)
         assertEquals(listOf(10200), s.withoutPolicy(10123).policies.map { it.uid })
     }
+
+    @Test
+    fun openOnFollowsItsDisplayAcrossReboots() {
+        val s = sample().withPolicy(DisplayPolicy(10300, "com.hidden", Visibility.ONLY, setOf(6), launchDisplayId = 6))
+        assertEquals(DisplayRef.Key("B"), s.policies.first { it.uid == 10300 }.launch)
+        val after = SavedState.decode(s.encode()).withRestoredId("B", 9)
+        val p = after.resolvedPolicies().first { it.uid == 10300 }
+        assertEquals(9, p.launchDisplayId)
+        assertEquals(setOf(9), p.displayIds)
+        assertEquals(null, s.withoutDisplayId(6).policies.first { it.uid == 10300 }.launch)
+    }
+
+    @Test
+    fun policiesSavedBefore15StillLoad() {
+        val old = "V|1|1\nD|A|LSPOSED|1920|1080|240|0|5|TV\nP|10123|com.game|ONLY|k:A|||\n"
+        val p = SavedState.decode(old).resolvedPolicies().single()
+        assertEquals(setOf(5), p.displayIds)
+        assertEquals(null, p.launchDisplayId)
+    }
 }

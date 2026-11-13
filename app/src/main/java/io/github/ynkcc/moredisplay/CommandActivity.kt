@@ -33,6 +33,9 @@ class CommandActivity : Activity() {
 
         /** Requirement B: rewrite the mirror source to this displayId while recording. (operated_display_id is reserved for requirement C) */
         const val EXTRA_RECORD_DISPLAY_ID = "record_display_id"
+
+        /** "Open on": always start this app's activities on this display. */
+        const val EXTRA_LAUNCH_DISPLAY_ID = "launch_display_id"
         const val EXTRA_OPERATED_DISPLAY_ID = "operated_display_id"
 
         private const val ACTION_CREATE = "create"
@@ -151,7 +154,8 @@ class CommandActivity : Activity() {
                     visibility = mode,
                     displayIds = ids,
                     operatedDisplayId = intent.getIntExtra(EXTRA_OPERATED_DISPLAY_ID, -1).takeIf { it >= 0 },
-                    recordDisplayId = intent.getIntExtra(EXTRA_RECORD_DISPLAY_ID, -1).takeIf { it >= 0 }
+                    recordDisplayId = intent.getIntExtra(EXTRA_RECORD_DISPLAY_ID, -1).takeIf { it >= 0 },
+                    launchDisplayId = intent.getIntExtra(EXTRA_LAUNCH_DISPLAY_ID, -1).takeIf { it >= 0 }
                 )
                 val stored = repo.setDisplayPolicy(policy).getOrElse {
                     throw IllegalStateException("setDisplayPolicy failed: ${it.message}", it)

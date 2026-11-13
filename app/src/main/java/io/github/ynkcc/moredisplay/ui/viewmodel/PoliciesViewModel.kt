@@ -77,7 +77,8 @@ class PoliciesViewModel(
         visibility: Visibility,
         displayIds: Set<Int>,
         operatedDisplayId: Int?,
-        recordDisplayId: Int?
+        recordDisplayId: Int?,
+        launchDisplayId: Int? = null
     ) {
         viewModelScope.launch {
             _busy.value = true
@@ -88,7 +89,8 @@ class PoliciesViewModel(
                     visibility = visibility,
                     displayIds = displayIds,
                     operatedDisplayId = operatedDisplayId,
-                    recordDisplayId = recordDisplayId
+                    recordDisplayId = recordDisplayId,
+                    launchDisplayId = launchDisplayId
                 )
             ).fold(
                 onSuccess = {
