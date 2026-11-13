@@ -246,6 +246,7 @@ object RpcCodec {
         policy.displayIds.forEach { parcel.writeInt(it) }
         writeNullableInt(parcel, policy.operatedDisplayId)
         writeNullableInt(parcel, policy.recordDisplayId)
+        writeNullableInt(parcel, policy.launchDisplayId)
     }
 
     private fun readPolicy(parcel: Parcel) = DisplayPolicy(
@@ -254,7 +255,8 @@ object RpcCodec {
         visibility = Visibility.fromName(parcel.readString()),
         displayIds = buildSet { repeat(parcel.readInt()) { add(parcel.readInt()) } },
         operatedDisplayId = readNullableInt(parcel),
-        recordDisplayId = readNullableInt(parcel)
+        recordDisplayId = readNullableInt(parcel),
+        launchDisplayId = readNullableInt(parcel)
     )
 
     private fun writeNullablePolicy(parcel: Parcel, policy: DisplayPolicy?) {

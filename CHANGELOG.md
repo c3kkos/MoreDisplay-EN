@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.5-EN (versionCode 8, English edition)
+
+### Added
+- **Open on**: a policy can name the display an app always opens on, whoever starts it (home-screen icon,
+  notification, another app, the app itself). Pick a virtual display to keep the app entirely off the built-in
+  screen and watch it with the eye. Until now a policy only controlled which displays an app could *see*, so an app
+  launched from the home screen still opened on the built-in screen. Implemented in system_server by setting the
+  launch display on the start request (`ActivityStarter#executeRequest`); an existing task is moved to that display
+  when it's brought to front. Saved and restored across reboots like the other policy fields. adb:
+  `--ei launch_display_id N`. The policy editor warns if the app couldn't see its Open-on display.
+
+### Fixed
+- The launch permission hook (needed to start apps on managed displays) is now also installed on Android 10/11.
+
+### Changed
+- Internal protocol version 20 (the policy record gained a field): reboot after updating, as always.
+
 ## 1.4.2-EN (versionCode 7, English edition)
 
 ### Changed

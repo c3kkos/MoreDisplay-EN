@@ -80,6 +80,7 @@ internal fun PolicyEditorSheet(
     var selectedIds by remember { mutableStateOf(editing?.displayIds ?: emptySet()) }
     var record by remember { mutableStateOf(editing?.recordDisplayId ?: -1) }
     var operated by remember { mutableStateOf(editing?.operatedDisplayId ?: -1) }
+    var launch by remember { mutableStateOf(editing?.launchDisplayId ?: -1) }
     var showPicker by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
 
@@ -212,6 +213,35 @@ internal fun PolicyEditorSheet(
                 )
             }
 
+            // -- Open on --
+            Text("Open on", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "The display this app always opens on, whoever starts it (home screen, notification, ...). " +
+                    "Pick a virtual display to keep the app off your screen; watch it with the eye. " +
+                    "If the app is already open, close it from Recents once.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            RedirectChips(
+                displayIds = displayIds,
+                displays = displays,
+                selected = launch,
+                onSelect = { launch = it },
+                noneLabel = "#${BuiltInDisplay.ID} Built-in (as usual)"
+            )
+            val launchVisible = launch < 0 || when (visibility) {
+                Visibility.ALL -> true
+                Visibility.ONLY -> launch in selectedIds
+                Visibility.HIDE -> launch !in selectedIds
+            }
+            if (!launchVisible) {
+                Text(
+                    "The app would open on a display it isn't allowed to see. Tick it in Visibility above.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+
             // -- Recording redirect --
             Text("Recording redirect", style = MaterialTheme.typography.titleSmall)
             Text(
@@ -253,7 +283,8 @@ internal fun PolicyEditorSheet(
                                 displayIds =
                                     if (visibility == Visibility.ALL) emptySet() else selectedIds,
                                 operatedDisplayId = operated.takeIf { it >= 0 },
-                                recordDisplayId = record.takeIf { it >= 0 }
+                                recordDisplayId = record.takeIf { it >= 0 },
+                                launchDisplayId = launch.takeIf { it >= 0 }
                             )
                         )
                     }
@@ -304,13 +335,14 @@ private fun RedirectChips(
     displayIds: List<Int>,
     displays: Map<Int, DisplayInfo>,
     selected: Int,
-    onSelect: (Int) -> Unit
+    onSelect: (Int) -> Unit,
+    noneLabel: String = "#${BuiltInDisplay.ID} Built-in (no redirect)"
 ) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(
             selected = selected == -1,
             onClick = { onSelect(-1) },
-            label = { Text("#${BuiltInDisplay.ID} Built-in (no redirect)") }
+            label = { Text(noneLabel) }
         )
         displayIds.filter { it != BuiltInDisplay.ID }.forEach { id ->
             FilterChip(

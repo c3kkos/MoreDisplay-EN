@@ -114,6 +114,22 @@ object DisplayPolicyRegistry {
         }
     }
 
+    /**
+     * "Open on": the display every activity of this app should start on, or null (= no intervention).
+     * Matched by package name + user, like [operatedDisplayIdForPackage], because the starter knows the target
+     * activity's package and user; [uid] is used when it is known.
+     */
+    fun launchDisplayIdFor(packageName: String?, uid: Int): Int? {
+        if (!isAppUid(uid) && packageName.isNullOrEmpty()) return null
+        return synchronized(lock) {
+            policies[uid]?.launchDisplayId
+                ?: policies.values.firstOrNull {
+                    !packageName.isNullOrEmpty() && it.packageName == packageName &&
+                        it.uid / PER_USER_RANGE == uid / PER_USER_RANGE
+                }?.launchDisplayId
+        }
+    }
+
     /** Whether this uid should see this displayId. */
     fun isVisible(uid: Int, displayId: Int): Boolean {
         // The default display is never filtered (see the DEFAULT_DISPLAY_ID comment: removing it makes DecorContext NPE).

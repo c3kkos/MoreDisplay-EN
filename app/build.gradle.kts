@@ -13,8 +13,8 @@ android {
         applicationId = "io.github.ynkcc.moredisplay"
         minSdk = 29
         targetSdk = 37
-        versionCode = 7
-        versionName = "1.4.2-EN"
+        versionCode = 8
+        versionName = "1.5-EN"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
