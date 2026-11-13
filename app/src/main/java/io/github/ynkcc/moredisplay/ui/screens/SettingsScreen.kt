@@ -42,6 +42,7 @@ import io.github.ynkcc.moredisplay.eye.ViewerController
 fun SettingsScreen() {
     val context = LocalContext.current
     val enabled by EyeSettings.enabled.collectAsStateWithLifecycle()
+    val touch by EyeSettings.touch.collectAsStateWithLifecycle()
 
     Column(
         Modifier
@@ -56,7 +57,7 @@ fun SettingsScreen() {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Eye controls", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "The eye shows a virtual display in a picture-in-picture window on this screen, view only. " +
+                    "The eye shows a virtual display in a picture-in-picture window on this screen. " +
                         "It only moves the display's picture; the display and its apps are not touched. " +
                         "Choose where the eye can be used from.",
                     style = MaterialTheme.typography.bodySmall,
@@ -88,6 +89,22 @@ fun SettingsScreen() {
                         )
                     }
                 }
+                HorizontalDivider()
+                Text("Touch control", style = MaterialTheme.typography.titleSmall)
+                SwitchRow(
+                    title = "Touch control in the full-screen eye",
+                    description = "Expand the eye to full screen and use the app by touch (taps, swipes, pinch). " +
+                        "The viewer's Back button sends Back to the app; your own Back shrinks the viewer. " +
+                        "A picture-in-picture window can't receive touches, so PiP stays view only.",
+                    checked = touch.enabled,
+                    onChange = { on -> EyeSettings.setTouch(touch.copy(enabled = on)) }
+                )
+                SwitchRow(
+                    title = "Show touches",
+                    description = "A dot under each finger on the eye's picture.",
+                    checked = touch.showTouches,
+                    onChange = { on -> EyeSettings.setTouch(touch.copy(showTouches = on)) }
+                )
             }
         }
 

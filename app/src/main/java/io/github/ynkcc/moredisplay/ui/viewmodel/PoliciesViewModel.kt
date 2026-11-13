@@ -78,7 +78,9 @@ class PoliciesViewModel(
         displayIds: Set<Int>,
         operatedDisplayId: Int?,
         recordDisplayId: Int?,
-        launchDisplayId: Int? = null
+        launchDisplayId: Int? = null,
+        orientation: io.github.ynkcc.moredisplay.core.OrientationOverride =
+            io.github.ynkcc.moredisplay.core.OrientationOverride.APP
     ) {
         viewModelScope.launch {
             _busy.value = true
@@ -90,7 +92,8 @@ class PoliciesViewModel(
                     displayIds = displayIds,
                     operatedDisplayId = operatedDisplayId,
                     recordDisplayId = recordDisplayId,
-                    launchDisplayId = launchDisplayId
+                    launchDisplayId = launchDisplayId,
+                    orientation = orientation
                 )
             ).fold(
                 onSuccess = {

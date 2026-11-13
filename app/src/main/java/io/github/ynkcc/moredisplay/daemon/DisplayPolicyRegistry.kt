@@ -3,6 +3,7 @@ package io.github.ynkcc.moredisplay.daemon
 import android.os.Process
 import android.util.Log
 import io.github.ynkcc.moredisplay.core.DisplayPolicy
+import io.github.ynkcc.moredisplay.core.OrientationOverride
 import io.github.ynkcc.moredisplay.core.Visibility
 
 /**
@@ -127,6 +128,19 @@ object DisplayPolicyRegistry {
                     !packageName.isNullOrEmpty() && it.packageName == packageName &&
                         it.uid / PER_USER_RANGE == uid / PER_USER_RANGE
                 }?.launchDisplayId
+        }
+    }
+
+    /** The orientation override for an app's activity ([packageName] + [uid], matched like [launchDisplayIdFor]). */
+    fun orientationFor(packageName: String?, uid: Int): OrientationOverride {
+        if (policies.isEmpty()) return OrientationOverride.APP
+        return synchronized(lock) {
+            policies[uid]?.orientation
+                ?: policies.values.firstOrNull {
+                    !packageName.isNullOrEmpty() && it.packageName == packageName &&
+                        it.uid / PER_USER_RANGE == uid / PER_USER_RANGE
+                }?.orientation
+                ?: OrientationOverride.APP
         }
     }
 

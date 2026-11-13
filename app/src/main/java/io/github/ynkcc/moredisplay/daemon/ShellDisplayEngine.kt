@@ -124,6 +124,15 @@ class ShellDisplayEngine(
 
     override fun detachViewer(displayId: Int): Boolean = viewers.detach(displayId)
 
+    private val touch = TouchChannels(TAG) { id -> virtualDisplays.containsKey(id) }
+
+    override fun openTouchChannel(
+        displayId: Int,
+        pipe: android.os.ParcelFileDescriptor,
+        token: android.os.IBinder,
+        viewerTaskId: Int
+    ) = touch.open(displayId, pipe, token, viewerTaskId)
+
     private val sinkThread = HandlerThread("MoreDisplay-shell-sink").apply { start() }
     private val sinkHandler = Handler(sinkThread.looper)
 
@@ -278,6 +287,7 @@ class ShellDisplayEngine(
 
     override fun removeDisplay(displayId: Int) {
         viewers.forget(displayId)
+        touch.close(displayId)
         val info = managed.remove(displayId) ?: throw IllegalArgumentException("display $displayId not managed")
         val vd = virtualDisplays.remove(displayId) ?: throw IllegalStateException("display $displayId has no VirtualDisplay handle")
         val sink = sinks.remove(displayId)

@@ -28,13 +28,19 @@ interface DisplayEngine {
 
     /** Cast sound off. Returns false if it wasn't on. */
     fun stopAudioCapture(displayId: Int): Boolean = false
+
+    /** Touch control: inject the events from [pipe] into [displayId], a display this engine manages. */
+    fun openTouchChannel(displayId: Int, pipe: android.os.ParcelFileDescriptor, token: android.os.IBinder, viewerTaskId: Int)
 }
 
 /** The viewer's surface and binder token, carried next to an [RpcRequest.AttachViewer] request. */
 class ViewerAttachment(val surface: android.view.Surface, val token: android.os.IBinder)
 
-/** The cast sound pipe's write end and binder token, carried next to an [RpcRequest.StartAudioCapture] request. */
-class AudioAttachment(val pipe: android.os.ParcelFileDescriptor, val token: android.os.IBinder)
+/**
+ * A pipe end and the caller's binder token, carried next to [RpcRequest.StartAudioCapture] (write end) or
+ * [RpcRequest.OpenTouchChannel] (read end).
+ */
+class PipeAttachment(val pipe: android.os.ParcelFileDescriptor, val token: android.os.IBinder)
 
 interface RpcServer {
     fun start(engine: DisplayEngine)
@@ -45,7 +51,7 @@ fun handleRequest(
     engine: DisplayEngine,
     request: RpcRequest,
     viewer: ViewerAttachment? = null,
-    audio: AudioAttachment? = null
+    pipe: PipeAttachment? = null
 ): RpcResponse = when (request) {
     is RpcRequest.Ping -> RpcResponse.Pong(
         request.id,
@@ -137,15 +143,15 @@ fun handleRequest(
             { RpcResponse.Ok(request.id) },
             { RpcResponse.Error(request.id, 10, "detachViewer failed: ${it.message}") }
         )
-    is RpcRequest.StartAudioCapture -> if (audio == null) {
+    is RpcRequest.StartAudioCapture -> if (pipe == null) {
         RpcResponse.Error(request.id, 12, "startAudioCapture: no pipe received")
     } else {
-        runCatching { engine.startAudioCapture(request.displayId, audio.pipe, audio.token) }
+        runCatching { engine.startAudioCapture(request.displayId, pipe.pipe, pipe.token) }
             .fold(
                 { RpcResponse.IdList(request.id, it) },
                 {
                     android.util.Log.e("MoreDisplay_Rpc", "startAudioCapture ${request.displayId} failed", it)
-                    runCatching { audio.pipe.close() }
+                    runCatching { pipe.pipe.close() }
                     RpcResponse.Error(request.id, 13, "cast sound: ${it.message}")
                 }
             )
@@ -155,6 +161,19 @@ fun handleRequest(
             { RpcResponse.Ok(request.id) },
             { RpcResponse.Error(request.id, 14, "stopAudioCapture failed: ${it.message}") }
         )
+    is RpcRequest.OpenTouchChannel -> if (pipe == null) {
+        RpcResponse.Error(request.id, 15, "openTouchChannel: no pipe received")
+    } else {
+        runCatching { engine.openTouchChannel(request.displayId, pipe.pipe, pipe.token, request.viewerTaskId) }
+            .fold(
+                { RpcResponse.Ok(request.id) },
+                {
+                    android.util.Log.e("MoreDisplay_Rpc", "openTouchChannel ${request.displayId} failed", it)
+                    runCatching { pipe.pipe.close() }
+                    RpcResponse.Error(request.id, 16, "touch control: ${it.message}")
+                }
+            )
+    }
 }
 
 /** Prints hook hit counters, distinguishing "installed" from "effective". */

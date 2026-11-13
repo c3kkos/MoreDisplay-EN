@@ -266,6 +266,31 @@ class DisplayRepository : IDisplayRepository {
             Result.failure(IllegalStateException("attachViewer $displayId: ${last?.message() ?: "not connected"}"))
         }
 
+    /**
+     * Touch control: the daemon that owns [displayId] injects the events written into [pipe] (a pipe's read end)
+     * into that display, and gives focus back to [viewerTaskId] after each gesture.
+     */
+    suspend fun openTouchChannel(
+        displayId: Int,
+        pipe: android.os.ParcelFileDescriptor,
+        token: android.os.IBinder,
+        viewerTaskId: Int
+    ): Result<Unit> = withContext(slotDispatcher) {
+        val extras = android.os.Bundle().apply {
+            putParcelable(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_PIPE, pipe)
+            putBinder(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_PIPE_TOKEN, token)
+        }
+        var last: RpcResponse? = null
+        for (slot in orderedSlotsFor(displayId)) {
+            val response = runCatching {
+                slot.transport.sendWithExtras(RpcRequest.OpenTouchChannel(nextId(), displayId, viewerTaskId), extras)
+            }.getOrElse { RpcResponse.Error(0, -1, "rpc failed: ${it.message}") }
+            if (response is RpcResponse.Ok) return@withContext Result.success(Unit)
+            last = response
+        }
+        Result.failure(IllegalStateException("touch control for display $displayId: ${last?.message() ?: "not connected"}"))
+    }
+
     /** Sends [displayId]'s frames back to its sink. */
     suspend fun detachViewer(displayId: Int): Result<Unit> = withContext(slotDispatcher) {
         var last: RpcResponse? = null
@@ -289,8 +314,8 @@ class DisplayRepository : IDisplayRepository {
         val slot = slots[Privilege.LSPOSED]
             ?: return@withContext Result.failure(IllegalStateException("cast sound needs the Vector channel"))
         val extras = android.os.Bundle().apply {
-            putParcelable(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_AUDIO_PIPE, pipe)
-            putBinder(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_AUDIO_TOKEN, token)
+            putParcelable(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_PIPE, pipe)
+            putBinder(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_PIPE_TOKEN, token)
         }
         val response = runCatching {
             slot.transport.sendWithExtras(RpcRequest.StartAudioCapture(nextId(), displayId), extras)

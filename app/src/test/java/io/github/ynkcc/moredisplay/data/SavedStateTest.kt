@@ -1,6 +1,7 @@
 package io.github.ynkcc.moredisplay.data
 
 import io.github.ynkcc.moredisplay.core.DisplayPolicy
+import io.github.ynkcc.moredisplay.core.OrientationOverride
 import io.github.ynkcc.moredisplay.core.DisplaySpec
 import io.github.ynkcc.moredisplay.core.Privilege
 import io.github.ynkcc.moredisplay.core.Visibility
@@ -93,5 +94,16 @@ class SavedStateTest {
         val p = SavedState.decode(old).resolvedPolicies().single()
         assertEquals(setOf(5), p.displayIds)
         assertEquals(null, p.launchDisplayId)
+    }
+
+    @Test
+    fun orientationOverrideIsSavedAndOldFilesDefaultToApp() {
+        val s = sample().withPolicy(
+            DisplayPolicy(10400, "com.video", Visibility.ALL, emptySet(), orientation = OrientationOverride.LANDSCAPE)
+        )
+        val back = SavedState.decode(s.encode()).resolvedPolicies().first { it.uid == 10400 }
+        assertEquals(OrientationOverride.LANDSCAPE, back.orientation)
+        val old = "V|1|1\nP|10123|com.game|ALL||||\n"
+        assertEquals(OrientationOverride.APP, SavedState.decode(old).resolvedPolicies().single().orientation)
     }
 }

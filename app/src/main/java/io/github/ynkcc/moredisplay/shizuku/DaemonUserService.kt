@@ -62,8 +62,8 @@ class DaemonUserService @Keep constructor(context: Context) : IDaemonRpc.Stub() 
     override fun attachViewer(payload: ByteArray, viewer: android.os.Bundle?): ByteArray {
         val request = RpcCodec.unmarshallRequest(payload)
         val attachment = viewer?.let { ProviderRpc.viewerFrom(it) }
-        val audio = viewer?.let { ProviderRpc.audioFrom(it) }
-        val response = runCatching { handleRequest(engine, request, attachment, audio) }
+        val pipe = viewer?.let { ProviderRpc.pipeFrom(it) }
+        val response = runCatching { handleRequest(engine, request, attachment, pipe) }
             .getOrElse { RpcResponse.Error(request.id, -1, "attachViewer crashed: ${it.message}") }
         return RpcCodec.marshallResponse(response)
     }

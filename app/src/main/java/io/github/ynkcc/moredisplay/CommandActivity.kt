@@ -37,6 +37,9 @@ class CommandActivity : Activity() {
 
         /** "Open on": always start this app's activities on this display. */
         const val EXTRA_LAUNCH_DISPLAY_ID = "launch_display_id"
+
+        /** Orientation override: `app` (default) or `landscape`. */
+        const val EXTRA_ORIENTATION = "orientation"
         const val EXTRA_OPERATED_DISPLAY_ID = "operated_display_id"
 
         private const val ACTION_CREATE = "create"
@@ -159,7 +162,10 @@ class CommandActivity : Activity() {
                     displayIds = ids,
                     operatedDisplayId = intent.getIntExtra(EXTRA_OPERATED_DISPLAY_ID, -1).takeIf { it >= 0 },
                     recordDisplayId = intent.getIntExtra(EXTRA_RECORD_DISPLAY_ID, -1).takeIf { it >= 0 },
-                    launchDisplayId = intent.getIntExtra(EXTRA_LAUNCH_DISPLAY_ID, -1).takeIf { it >= 0 }
+                    launchDisplayId = intent.getIntExtra(EXTRA_LAUNCH_DISPLAY_ID, -1).takeIf { it >= 0 },
+                    orientation = io.github.ynkcc.moredisplay.core.OrientationOverride.fromName(
+                        intent.getStringExtra(EXTRA_ORIENTATION)
+                    )
                 )
                 val stored = repo.setDisplayPolicy(policy).getOrElse {
                     throw IllegalStateException("setDisplayPolicy failed: ${it.message}", it)

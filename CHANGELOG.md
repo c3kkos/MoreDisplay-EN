@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.7.0-EN (versionCode 11, English edition)
+
+### Added
+- **Touch control in the full-screen eye.** Taps, swipes, scrolling and pinch on the viewer's picture are mapped to
+  the virtual display's pixels and sent over a pipe (opened once per viewer) to the daemon that owns the display,
+  which injects them into that display only (Vector: system_server; Shizuku: shell). A Back button in the viewer's
+  controls sends Back to the app on the display. After each gesture, focus is given back to the viewer's task
+  (`ActivityTaskManager#setFocusedTask`), so the tablet's own Back (which shrinks the viewer to PiP) and Home keep
+  working. PiP itself stays view only (Android keeps touches on PiP windows for its own controls).
+- Settings → Eye controls: *Touch control in the full-screen eye* (on) and *Show touches* (off).
+- **Orientation: Landscape** policy field: portrait requests of the app (manifest and `setRequestedOrientation`)
+  are answered with landscape, via a hook on `WindowContainer#setOrientation`, so a portrait app fills a landscape
+  virtual display instead of being letterboxed. Saved across reboots; adb `--es orientation landscape`.
+- Unit tests for the touch event encoding, coordinate mapping, orientation mapping and the new policy field.
+
+### Changed
+- Internal protocol version 22 (touch channel, policy orientation field): reboot after updating.
+
 ## 1.6.0-EN (versionCode 10, English edition)
 
 ### Added

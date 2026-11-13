@@ -69,6 +69,15 @@ class SystemDisplayEngine(
 
     override fun stopAudioCapture(displayId: Int): Boolean = audio.stop(displayId)
 
+    private val touch = TouchChannels(TAG) { id -> synchronized(lock) { handles.containsKey(id) } }
+
+    override fun openTouchChannel(
+        displayId: Int,
+        pipe: android.os.ParcelFileDescriptor,
+        token: android.os.IBinder,
+        viewerTaskId: Int
+    ) = touch.open(displayId, pipe, token, viewerTaskId)
+
     private val viewers = ViewerSwitch(TAG) { id ->
         synchronized(lock) {
             val vd = handles[id] ?: return@synchronized null
@@ -230,6 +239,7 @@ class SystemDisplayEngine(
         val sink: ImageReader?
         viewers.forget(displayId)
         audio.stop(displayId)
+        touch.close(displayId)
         synchronized(lock) {
             managed.remove(displayId) ?: throw IllegalArgumentException("display $displayId not managed")
             vd = handles.remove(displayId)

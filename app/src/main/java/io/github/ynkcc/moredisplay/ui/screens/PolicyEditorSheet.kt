@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import io.github.ynkcc.moredisplay.ui.BuiltInDisplay
 import io.github.ynkcc.moredisplay.core.DisplayInfo
 import io.github.ynkcc.moredisplay.core.DisplayPolicy
+import io.github.ynkcc.moredisplay.core.OrientationOverride
 import io.github.ynkcc.moredisplay.core.Visibility
 import io.github.ynkcc.moredisplay.ui.viewmodel.AppEntry
 
@@ -81,6 +82,7 @@ internal fun PolicyEditorSheet(
     var record by remember { mutableStateOf(editing?.recordDisplayId ?: -1) }
     var operated by remember { mutableStateOf(editing?.operatedDisplayId ?: -1) }
     var launch by remember { mutableStateOf(editing?.launchDisplayId ?: -1) }
+    var orientation by remember { mutableStateOf(editing?.orientation ?: OrientationOverride.APP) }
     var showPicker by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
 
@@ -242,6 +244,27 @@ internal fun PolicyEditorSheet(
                 )
             }
 
+            // -- Orientation --
+            Text("Orientation", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Landscape: when this app asks for portrait, it gets landscape instead, so it fills a landscape " +
+                    "virtual display instead of showing as a narrow strip. Applies wherever the app is shown.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = orientation == OrientationOverride.APP,
+                    onClick = { orientation = OrientationOverride.APP },
+                    label = { Text("As the app wants") }
+                )
+                FilterChip(
+                    selected = orientation == OrientationOverride.LANDSCAPE,
+                    onClick = { orientation = OrientationOverride.LANDSCAPE },
+                    label = { Text("Landscape") }
+                )
+            }
+
             // -- Recording redirect --
             Text("Recording redirect", style = MaterialTheme.typography.titleSmall)
             Text(
@@ -284,7 +307,8 @@ internal fun PolicyEditorSheet(
                                     if (visibility == Visibility.ALL) emptySet() else selectedIds,
                                 operatedDisplayId = operated.takeIf { it >= 0 },
                                 recordDisplayId = record.takeIf { it >= 0 },
-                                launchDisplayId = launch.takeIf { it >= 0 }
+                                launchDisplayId = launch.takeIf { it >= 0 },
+                                orientation = orientation
                             )
                         )
                     }

@@ -1,7 +1,7 @@
 package io.github.ynkcc.moredisplay.core
 
 object DaemonProtocol {
-    const val DAEMON_VERSION = 21
+    const val DAEMON_VERSION = 22
 }
 
 sealed interface RpcRequest {
@@ -47,6 +47,13 @@ sealed interface RpcRequest {
 
     /** Cast sound off: give [displayId]'s apps their speaker back. */
     data class StopAudioCapture(override val id: Int, val displayId: Int) : RpcRequest
+
+    /**
+     * Touch control: inject the touch events read from a pipe into [displayId] (a managed display only). The pipe's
+     * read end and the viewer's token travel next to the request. After each gesture, focus goes back to
+     * [viewerTaskId] (-1 = don't).
+     */
+    data class OpenTouchChannel(override val id: Int, val displayId: Int, val viewerTaskId: Int) : RpcRequest
 }
 
 sealed interface RpcResponse {

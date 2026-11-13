@@ -143,7 +143,8 @@ fun PoliciesScreen(
                     displayIds = policy.displayIds,
                     operatedDisplayId = policy.operatedDisplayId,
                     recordDisplayId = policy.recordDisplayId,
-                    launchDisplayId = policy.launchDisplayId
+                    launchDisplayId = policy.launchDisplayId,
+                    orientation = policy.orientation
                 )
             },
             onDelete = editing?.let { policy ->
@@ -242,6 +243,8 @@ private fun PolicyCard(
             }
             val extras = listOfNotNull(
                 policy.launchDisplayId?.let { "Opens on #$it" },
+                policy.orientation.takeIf { it == io.github.ynkcc.moredisplay.core.OrientationOverride.LANDSCAPE }
+                    ?.let { "Landscape" },
                 policy.recordDisplayId?.let { "Recording->#$it" },
                 policy.operatedDisplayId?.let { "A11y->#$it" }
             ).joinToString("  ")
