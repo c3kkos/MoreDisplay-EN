@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.8.0-EN (versionCode 13, English edition)
+
+Maintenance release: no new features and no intended behaviour changes, except the icon.
+
+### Changed
+- **New launcher icon** from the repository logo (rainbow TV with "MD") on a warm light background, as an adaptive
+  icon with a themed (monochrome) layer for Android 13+.
+- **No main-thread waits on the daemon:** closing the eye and stopping a cast no longer block the screen while
+  the daemon answers. Detaching a viewer and stopping cast sound are tied to the caller's token, so a late request
+  can never affect a newer viewer or cast.
+- Eye, cast and touch requests (including detach and stop) are accepted only from MoreDisplay itself.
+- Internal: hidden Android APIs (display list, input injection, task focus, audio policy) in one `HiddenApi`
+  helper; one side channel (`RpcExtras`) and one "send to the display's channel" helper instead of three copies;
+  the eye's viewer split into picture source, touch control and window; Shizuku interface method renamed
+  `sendWithExtras`; the encoder's redundant repeat-frame setting removed. Protocol version 23: reboot after
+  updating (the Shizuku service restarts by itself).
+- CI runs Android lint (errors fail the build, findings are printed in the log); two intentional uses of APIs that
+  are hidden on older Android versions are now marked as such.
+
 ## 1.7.1-EN (versionCode 12, English edition)
 
 ### Fixed

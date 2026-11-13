@@ -139,6 +139,9 @@ class SystemDisplayEngine(
      * `VirtualDisplayConfig` is the config, and everything else (projection, callback, handler/executor, window context)
      * is null -- exactly what the old fixed call passed.
      */
+    // VirtualDisplayConfig is a hidden class on Android 11-13 and public from Android 14; lint only knows the public
+    // API level. This path is only used on Android 11+ (Android 10 uses the legacy signature).
+    @android.annotation.SuppressLint("NewApi")
     private fun invokeCreateVirtualDisplay(global: Any, spec: DisplaySpec, flags: Int, surface: Surface): VirtualDisplay? {
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
             return invokeLegacyCreate(global, spec, flags, surface)
@@ -167,6 +170,7 @@ class SystemDisplayEngine(
     }
 
     @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.R)
+    @android.annotation.SuppressLint("NewApi") // hidden on Android 11-13, see invokeCreateVirtualDisplay
     private fun buildConfig(spec: DisplaySpec, flags: Int, surface: Surface): VirtualDisplayConfig =
         VirtualDisplayConfig.Builder(spec.name, spec.width, spec.height, spec.densityDpi)
             .setFlags(flags)

@@ -84,6 +84,9 @@ class ShellDisplayEngine(
         }
     }
 
+    // AttributionSource is Android 12+; this is only reached through Context#getAttributionSource, which the
+    // framework calls on Android 12+ only.
+    @android.annotation.SuppressLint("NewApi")
     private fun attributionSourceFor(packageName: String): android.content.AttributionSource {
         val cls = android.content.AttributionSource::class.java
         val ctor = cls.declaredConstructors.firstOrNull {
