@@ -104,9 +104,13 @@ class AudioRouter(private val context: Context) {
         return uids.toList()
     }
 
-    /** Puts the sound of [displayId]'s apps back on the speaker. */
-    fun stop(displayId: Int): Boolean {
-        val session = synchronized(lock) { sessions.remove(displayId) } ?: return false
+    /** Puts the sound of [displayId]'s apps back on the speaker (only [token]'s session, if given). */
+    fun stop(displayId: Int, token: IBinder? = null): Boolean {
+        val session = synchronized(lock) {
+            val current = sessions[displayId] ?: return false
+            if (token != null && current.token !== token) return false
+            sessions.remove(displayId)
+        } ?: return false
         runCatching { session.token.unlinkToDeath(session.death, 0) }
         runCatching { session.record.stop() }
         session.pump.interrupt()
@@ -118,8 +122,7 @@ class AudioRouter(private val context: Context) {
     }
 
     private fun stopIfCurrent(displayId: Int, token: IBinder) {
-        val current = synchronized(lock) { sessions[displayId]?.token === token }
-        if (current) stop(displayId)
+        stop(displayId, token)
     }
 
     private fun pump(displayId: Int, record: AudioRecord, pipe: ParcelFileDescriptor, token: IBinder) {

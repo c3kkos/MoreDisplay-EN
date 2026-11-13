@@ -50,9 +50,17 @@ class ViewerSwitch(
         Log.i(tag, "eye on: display $displayId -> viewer")
     }
 
-    /** Sends the display's frames back to its sink. Returns false if no viewer was attached. */
-    fun detach(displayId: Int): Boolean {
-        val viewer = synchronized(lock) { viewers.remove(displayId) } ?: return false
+    /**
+     * Sends the display's frames back to its sink. With a [token], only if that viewer is still the attached one:
+     * a late detach from a closed eye or a stopped cast must not hit the viewer that replaced it.
+     * Returns false if nothing was detached.
+     */
+    fun detach(displayId: Int, token: IBinder? = null): Boolean {
+        val viewer = synchronized(lock) {
+            val current = viewers[displayId] ?: return false
+            if (token != null && current.token !== token) return false
+            viewers.remove(displayId)
+        } ?: return false
         runCatching { viewer.token.unlinkToDeath(viewer.death, 0) }
         resolve(displayId)?.let { (vd, sink) ->
             EyeSwapGate.shared.markSwap(displayId)
@@ -73,7 +81,6 @@ class ViewerSwitch(
     fun watched(): Set<Int> = synchronized(lock) { viewers.keys.toSet() }
 
     private fun detachIfCurrent(displayId: Int, token: IBinder) {
-        val isCurrent = synchronized(lock) { viewers[displayId]?.token === token }
-        if (isCurrent) detach(displayId)
+        detach(displayId, token)
     }
 }

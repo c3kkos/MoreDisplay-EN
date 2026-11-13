@@ -122,7 +122,7 @@ class ShellDisplayEngine(
     override fun attachViewer(displayId: Int, surface: Surface, token: android.os.IBinder) =
         viewers.attach(displayId, surface, token)
 
-    override fun detachViewer(displayId: Int): Boolean = viewers.detach(displayId)
+    override fun detachViewer(displayId: Int, token: android.os.IBinder?): Boolean = viewers.detach(displayId, token)
 
     private val touch = TouchChannels(TAG) { id -> virtualDisplays.containsKey(id) }
 

@@ -1,7 +1,7 @@
 package io.github.ynkcc.moredisplay.core
 
 object DaemonProtocol {
-    const val DAEMON_VERSION = 22
+    const val DAEMON_VERSION = 23
 }
 
 sealed interface RpcRequest {

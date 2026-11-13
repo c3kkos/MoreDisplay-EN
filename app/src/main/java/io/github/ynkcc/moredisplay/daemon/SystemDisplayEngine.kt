@@ -67,7 +67,7 @@ class SystemDisplayEngine(
         token: android.os.IBinder
     ): List<Int> = audio.start(displayId, DisplayPolicyRegistry.uidsOpeningOn(displayId), pipe, token)
 
-    override fun stopAudioCapture(displayId: Int): Boolean = audio.stop(displayId)
+    override fun stopAudioCapture(displayId: Int, token: android.os.IBinder?): Boolean = audio.stop(displayId, token)
 
     private val touch = TouchChannels(TAG) { id -> synchronized(lock) { handles.containsKey(id) } }
 
@@ -89,7 +89,7 @@ class SystemDisplayEngine(
     override fun attachViewer(displayId: Int, surface: Surface, token: android.os.IBinder) =
         viewers.attach(displayId, surface, token)
 
-    override fun detachViewer(displayId: Int): Boolean = viewers.detach(displayId)
+    override fun detachViewer(displayId: Int, token: android.os.IBinder?): Boolean = viewers.detach(displayId, token)
 
     override fun createDisplay(spec: DisplaySpec): DisplayInfo {
         if (!capabilities.supportsFlags(spec.flags)) {

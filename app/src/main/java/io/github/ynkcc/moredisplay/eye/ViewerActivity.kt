@@ -36,8 +36,6 @@ import io.github.ynkcc.moredisplay.cast.FrameHub
 import io.github.ynkcc.moredisplay.core.ConnectionStatus
 import io.github.ynkcc.moredisplay.core.DisplayInfo
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * The eye's viewer: shows a managed virtual display live in a real picture-in-picture window.
@@ -221,7 +219,7 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
                 .onSuccess {
                     if (attachedTo != id) {
                         // The surface went away while attaching: give the display its sink back.
-                        App.displays().detachViewer(id)
+                        App.displays().detachViewerLater(id, token)
                         return@onSuccess
                     }
                     Log.i(TAG, "showing display #$id")
@@ -260,9 +258,9 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
             Log.i(TAG, "stopped showing display #$id (from the cast)")
             return
         }
-        runBlocking {
-            withTimeoutOrNull(1_500) { App.displays().detachViewer(id) }
-        }
+        // Not waited for: the detach is tied to this viewer's token, so even if it lands late it can't touch a
+        // newer viewer, and the main thread never blocks on the daemon.
+        App.displays().detachViewerLater(id, token)
         Log.i(TAG, "stopped showing display #$id")
     }
 
