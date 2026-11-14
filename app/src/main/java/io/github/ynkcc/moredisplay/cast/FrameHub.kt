@@ -24,10 +24,11 @@ import java.util.concurrent.TimeUnit
  * the video encoder (with each frame's timestamp) and, optionally, the eye window. This is what lets casting and
  * the eye run at the same time.
  *
- * A virtual display only sends a frame when its content changes, and many encoders don't repeat the last frame by
- * themselves. So the hub keeps a steady frame rate ([fps]): when nothing new arrived within one frame interval it
- * draws the latest picture again (black until the first one). Timestamps come from `System.nanoTime()`, the same
- * clock as the cast sound.
+ * Constant frame rate: the outputs are drawn on a fixed clock at [fps] frames per second, always with the newest
+ * picture from the display (repeated when the display didn't change, black until the first one), and with evenly
+ * spaced timestamps. A display that draws at its own uneven pace (a virtual display only sends a frame when its
+ * content changes) would otherwise give the encoder uneven timestamps, which TVs show as stutter. Timestamps are
+ * on the `System.nanoTime()` clock, like the cast sound.
  *
  * All GL work happens on one thread. [setOutput] and [release] wait for it, so a caller can safely let a surface
  * go right after removing it.
@@ -86,11 +87,25 @@ class FrameHub(private val width: Int, private val height: Int, private val fps:
     var framesDrawn = 0L
         private set
 
+    private var tickBaseNs = 0L
+    private var tickIndex = 0L
+
+    /** Draws one frame per interval; timestamps are exact multiples of the interval, wake-ups may jitter. */
     private val ticker = object : Runnable {
         override fun run() {
             if (released) return
-            if (System.nanoTime() - lastDrawNs >= intervalNs) drawOutputs()
-            handler.postDelayed(this, (intervalNs / 1_000_000L).coerceAtLeast(5))
+            val now = System.nanoTime()
+            if (tickBaseNs == 0L) tickBaseNs = now
+            var due = tickBaseNs + tickIndex * intervalNs
+            if (now - due > intervalNs) {
+                // Late by more than a frame (busy device): skip the missed frames instead of bursting them.
+                tickIndex = (now - tickBaseNs) / intervalNs
+                due = tickBaseNs + tickIndex * intervalNs
+            }
+            drawOutputs(due)
+            tickIndex++
+            val next = tickBaseNs + tickIndex * intervalNs
+            handler.postDelayed(this, ((next - System.nanoTime()) / 1_000_000L).coerceAtLeast(0))
         }
     }
 
@@ -166,14 +181,13 @@ class FrameHub(private val width: Int, private val height: Int, private val fps:
         surfaceTexture.getTransformMatrix(texMatrix)
         hasPicture = true
         framesIn++
-        drawOutputs()
+        // Drawn by the ticker at the next frame time.
     }
 
-    private fun drawOutputs() {
+    private fun drawOutputs(dueNs: Long) {
         if (released || outputs.isEmpty()) return
-        val now = System.nanoTime()
         // Strictly increasing timestamps, as encoders require.
-        val timestamp = if (now > lastDrawNs) now else lastDrawNs + 1
+        val timestamp = if (dueNs > lastDrawNs) dueNs else lastDrawNs + 1
         lastDrawNs = timestamp
         for (out in outputs.values) {
             if (!EGL14.eglMakeCurrent(display, out.surface, out.surface, context)) continue

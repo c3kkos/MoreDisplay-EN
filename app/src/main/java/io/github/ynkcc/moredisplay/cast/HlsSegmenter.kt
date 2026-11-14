@@ -6,7 +6,8 @@ import java.util.Locale
 /**
  * Cuts the encoded stream into short MPEG-TS segments and serves a live HLS playlist over them (sliding window).
  * A new segment starts at the first key frame after [targetUs]; the encoder makes a key frame every second.
- * The playlist lists the last [window] segments (6 s, so a Wi-Fi hiccup on the TV side doesn't stall it) and
+ * Settings → Cast → Playback picks the length: 2 s (Smooth: players keep about three segments in reserve, so
+ * longer segments ride out Wi-Fi hiccups) or 1 s (Low delay). The playlist lists the last [window] segments and
  * [keep] segments stay downloadable for a player that is a little behind.
  * Pure Kotlin (unit-tested); thread-safe.
  *

@@ -191,6 +191,26 @@ private fun CastSettingsCard() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
+            Text("Playback", style = MaterialTheme.typography.titleSmall)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = config.smooth,
+                    onClick = { CastSettings.update { it.copy(smooth = true) } },
+                    label = { Text("Smooth") }
+                )
+                FilterChip(
+                    selected = !config.smooth,
+                    onClick = { CastSettings.update { it.copy(smooth = false) } },
+                    label = { Text("Low delay") }
+                )
+            }
+            Text(
+                "Smooth keeps more video ready on the TV, so Wi-Fi hiccups don't cause pauses (about 2 s more delay). " +
+                    "Low delay shows changes sooner but may pause on a busy network.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
             Text("Frame rate", style = MaterialTheme.typography.titleSmall)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(30, 60).forEach { fps ->

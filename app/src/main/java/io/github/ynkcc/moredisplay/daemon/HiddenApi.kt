@@ -127,7 +127,12 @@ internal object HiddenApi {
             val policy = policyBuilderClass.getMethod("build").invoke(policyBuilder)!!
 
             val policyClass = Class.forName("$AUDIO.AudioPolicy")
-            val result = AudioManager::class.java.getMethod("registerAudioPolicy", policyClass).invoke(audio, policy) as Int
+            // Inside system_server, AudioService's permission check (Context#checkCallingPermission) refuses calls
+            // that don't come over IPC, even though system_server holds MODIFY_AUDIO_ROUTING. AudioPolicyGate marks
+            // this one call so the module's hook on AudioService#isPolicyRegisterAllowed lets it through.
+            val result = AudioPolicyGate.trusted {
+                AudioManager::class.java.getMethod("registerAudioPolicy", policyClass).invoke(audio, policy) as Int
+            }
             check(result == 0) { "registerAudioPolicy failed ($result)" }
 
             val record = try {
