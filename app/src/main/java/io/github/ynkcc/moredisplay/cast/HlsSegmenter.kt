@@ -9,6 +9,12 @@ import java.util.Locale
  * Settings → Cast → Playback picks the length: 2 s (Smooth: players keep about three segments in reserve, so
  * longer segments ride out Wi-Fi hiccups) or 1 s (Low delay). The playlist lists the last [window] segments and
  * [keep] segments stay downloadable for a player that is a little behind.
+ *
+ * [holdBackUs] is how far behind the newest segment the player should play. A player at the newest edge can only
+ * download a segment once it's finished, so it runs dry at every segment (a pause every segment length). The
+ * playlist says so with the standard tags `EXT-X-SERVER-CONTROL:HOLD-BACK` and `EXT-X-START:TIME-OFFSET`
+ * (players that don't know a tag ignore it); the cast also waits for enough segments before playing and
+ * [CastController] moves a player that still pauses further back.
  * Pure Kotlin (unit-tested); thread-safe.
  *
  * Timestamps come in microseconds on any clock; they are rebased to start at 1 s in 90 kHz units.
@@ -17,7 +23,8 @@ class HlsSegmenter(
     private val hasAudio: Boolean,
     private val targetUs: Long = 1_000_000,
     private val keep: Int = 12,
-    private val window: Int = 6
+    private val window: Int = 6,
+    private val holdBackUs: Long = 0
 ) {
     class Segment(val sequence: Long, val durationUs: Long, val bytes: ByteArray)
 
@@ -52,6 +59,9 @@ class HlsSegmenter(
         muxer.writeAudio(adtsFrame, to90k(ptsUs) ?: return@synchronized)
     }
 
+    /** Segments finished since the start (diagnostics). */
+    fun made(): Long = synchronized(lock) { nextSequence }
+
     /** Number of finished segments available. */
     fun ready(): Int = synchronized(lock) { segments.size }
 
@@ -64,6 +74,11 @@ class HlsSegmenter(
             append("#EXTM3U\n")
             append("#EXT-X-VERSION:3\n")
             append("#EXT-X-TARGETDURATION:").append(target).append('\n')
+            if (holdBackUs > 0) {
+                val seconds = String.format(Locale.US, "%.1f", holdBackUs / 1_000_000.0)
+                append("#EXT-X-SERVER-CONTROL:HOLD-BACK=").append(seconds).append('\n')
+                append("#EXT-X-START:TIME-OFFSET=-").append(seconds).append('\n')
+            }
             append("#EXT-X-MEDIA-SEQUENCE:").append(shown.first().sequence).append('\n')
             for (s in shown) {
                 append("#EXTINF:").append(String.format(Locale.US, "%.3f", s.durationUs / 1_000_000.0)).append(",\n")

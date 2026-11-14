@@ -12,6 +12,7 @@ import com.google.android.gms.cast.CastDevice as GmsCastDevice
 import com.google.android.gms.cast.MediaInfo
 import com.google.android.gms.cast.MediaLoadRequestData
 import com.google.android.gms.cast.MediaMetadata
+import com.google.android.gms.cast.MediaSeekOptions
 import com.google.android.gms.cast.MediaStatus
 import com.google.android.gms.cast.framework.media.RemoteMediaClient
 import com.google.android.gms.cast.framework.CastContext
@@ -52,6 +53,13 @@ object CastController {
     val activeHub: StateFlow<Pair<Int, FrameHub>?> = hubFlow
 
     fun hubFor(displayId: Int): FrameHub? = hubFlow.value?.takeIf { it.first == displayId }?.second
+
+    private val tabletFlow = MutableStateFlow<TabletStats?>(null)
+    private val receiverFlow = MutableStateFlow<ReceiverStats?>(null)
+
+    /** Counters of the running cast (null when not casting), for the cast card. */
+    val tabletStats: StateFlow<TabletStats?> = tabletFlow
+    val receiverStats: StateFlow<ReceiverStats?> = receiverFlow
 
     private val main = Handler(Looper.getMainLooper())
 
@@ -123,6 +131,7 @@ object CastController {
         var soundNote: String? = null
         var timeout: Runnable? = null
         var mediaCallback: RemoteMediaClient.Callback? = null
+        var statusPoll: Runnable? = null
     }
 
     private var nextAttempt = 0
@@ -190,6 +199,16 @@ object CastController {
     internal fun setState(state: CastState) {
         stateFlow.value = state
     }
+
+    internal fun setTabletStats(stats: TabletStats?) {
+        tabletFlow.value = stats
+    }
+
+    /** One line for the log: the TV's player counters. */
+    internal fun receiverSummary(): String = receiverFlow.value?.let {
+        "TV ${it.player}, ${it.behindS?.let { b -> "%.1f s behind the newest".format(java.util.Locale.US, b) } ?: "position unknown"}, " +
+            "${it.stalls} pauses, ${it.seeksBack} moved back"
+    } ?: "TV not playing yet"
 
     internal fun setHub(displayId: Int, hub: FrameHub?) {
         hubFlow.value = hub?.let { displayId to it }
@@ -295,12 +314,45 @@ object CastController {
             }
     }
 
-    /** Notices when the TV's player fails, or is stopped from the TV. */
+    /**
+     * Notices when the TV's player fails, or is stopped from the TV; reports its state for the cast card; and moves
+     * it back when it keeps pausing at the newest edge of the stream ([StallGuard]).
+     */
     private fun watchPlayer(a: Attempt, client: RemoteMediaClient) {
+        val guard = StallGuard(backMs = CastSettings.current().stallBackMs)
+        fun report(status: MediaStatus) {
+            val player = when (status.playerState) {
+                MediaStatus.PLAYER_STATE_PLAYING -> "playing"
+                MediaStatus.PLAYER_STATE_BUFFERING -> "buffering"
+                MediaStatus.PLAYER_STATE_PAUSED -> "paused"
+                MediaStatus.PLAYER_STATE_IDLE -> "idle"
+                else -> "loading"
+            }
+            val range = status.liveSeekableRange
+            val behind = range?.let { (it.endTime - status.streamPosition).coerceAtLeast(0) / 1_000f }
+            receiverFlow.value = ReceiverStats(player, behind, guard.stalls, guard.seeks)
+        }
         val callback = object : RemoteMediaClient.Callback() {
             override fun onStatusUpdated() {
                 if (attempt !== a) return
                 val status = client.mediaStatus ?: return
+                val state = when (status.playerState) {
+                    MediaStatus.PLAYER_STATE_PLAYING -> StallGuard.Player.PLAYING
+                    MediaStatus.PLAYER_STATE_BUFFERING -> StallGuard.Player.BUFFERING
+                    else -> StallGuard.Player.OTHER
+                }
+                val position = client.approximateStreamPosition
+                val stallsBefore = guard.stalls
+                val target = guard.onState(state, android.os.SystemClock.elapsedRealtime(), position,
+                    status.liveSeekableRange?.startTime)
+                if (guard.stalls != stallsBefore) Log.i(TAG, "${a.device} paused for data at ${position} ms (pause ${guard.stalls})")
+                if (target != null) {
+                    Log.i(TAG, "${a.device} keeps pausing at the newest edge: moving it back to $target ms (was $position)")
+                    client.seek(MediaSeekOptions.Builder().setPosition(target).build()).setResultCallback { r ->
+                        if (!r.status.isSuccess) Log.w(TAG, "seek back refused (Cast status ${r.status.statusCode})")
+                    }
+                }
+                report(status)
                 if (status.playerState != MediaStatus.PLAYER_STATE_IDLE) return
                 when (status.idleReason) {
                     MediaStatus.IDLE_REASON_ERROR ->
@@ -312,6 +364,14 @@ object CastController {
         }
         a.mediaCallback = callback
         client.registerCallback(callback)
+        // The player only reports changes; ask now and then so the card's "behind" stays current.
+        a.statusPoll = object : Runnable {
+            override fun run() {
+                if (attempt !== a) return
+                runCatching { client.requestStatus() }
+                main.postDelayed(this, 5_000)
+            }
+        }.also { main.postDelayed(it, 5_000) }
     }
 
     private fun fail(a: Attempt, message: String) {
@@ -337,6 +397,9 @@ object CastController {
         val a = attempt ?: return
         attempt = null
         a.timeout?.let { main.removeCallbacks(it) }
+        a.statusPoll?.let { main.removeCallbacks(it) }
+        tabletFlow.value = null
+        receiverFlow.value = null
         runCatching {
             val sessions = castContext(context).sessionManager
             a.mediaCallback?.let { cb -> a.session?.remoteMediaClient?.unregisterCallback(cb) }

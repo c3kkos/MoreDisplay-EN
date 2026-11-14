@@ -211,9 +211,11 @@ How it works: the screen's picture goes to the tablet's hardware video encoder (
 Chromecast plays it as a live stream from a small server in MoreDisplay, using Google's built-in
 player (no account or registration needed). The eye keeps working while casting.
 
-- **Delay**: about 4–7 seconds with **Playback: Smooth** (the default, which keeps more video ready on the
-  TV so Wi-Fi hiccups don't cause pauses), about 2–5 seconds with **Low delay**. Picture and sound are
-  delayed together, so they stay in sync.
+- **Delay**: about 10 seconds with **Playback: Smooth** (the default: stability first, the TV keeps plenty
+  of video in reserve), about 5 seconds with **Low delay**. Picture and sound are delayed together, so they
+  stay in sync. It takes about 10 seconds before the picture first appears.
+- **Live counters** on the cast card show what the TV's player is doing (and how often it paused), the
+  tablet's frame rates and the Wi-Fi speed, so a problem can be traced to the TV, the Wi-Fi or the tablet.
 - **Sound** (Vector only): the sound of the apps set to *Open on* the cast screen goes to the TV
   instead of the tablet speaker, until the cast stops. Apps that forbid sound capture stay silent.
   With Shizuku, casting is picture-only.
@@ -331,7 +333,7 @@ Common `flags` values (add them together): `1` PUBLIC, `64` SUPPORTS_TOUCH,
 | Cast: *Connect the tablet to the same Wi-Fi* | The tablet and the Chromecast must be on the same Wi-Fi network. |
 | Cast: the TV shows an error or stays loading | Check that the tablet and the Chromecast are on the same network and that no VPN or "client isolation" (common on guest Wi-Fi) blocks them from talking to each other. |
 | Cast: no sound on the TV | Sound needs the Vector channel and an app set to *Open on* the cast screen. Some apps forbid sound capture. After updating MoreDisplay, reboot once (the sound needs the updated module in Android's system process). |
-| Cast: the picture stutters or pauses | Use **Playback: Smooth** in Settings → Cast, try a lower quality, or bring the Chromecast closer to the router (5 GHz Wi-Fi helps). |
+| Cast: the picture stutters or pauses | Use **Playback: Smooth** in Settings → Cast. Then look at the cast card's counters: *encoder* well under the frame rate = the tablet can't keep up (try 30 fps or a lower quality); a low *last send* speed = weak Wi-Fi (bring the Chromecast closer to the router, 5 GHz helps); many *pauses* with normal numbers = please report them. |
 | Cast error with a `CAST-xx` code | See *Cast error codes* below. |
 | The eye tile/widget says *No display* | Tap the eye on a display card once, so it knows which screen to show. |
 | The eye window is black | The app on that screen protects its content (DRM/secure), or nothing is drawn there yet. |

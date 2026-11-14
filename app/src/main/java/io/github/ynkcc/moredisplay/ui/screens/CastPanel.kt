@@ -70,12 +70,13 @@ internal fun CastPanel(managed: Map<Int, DisplayInfo>) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    CastCounters()
                     OutlinedButton(onClick = { CastController.stop(context) }) { Text("Stop casting") }
                 }
                 is CastState.Starting -> {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Text("Connecting to ${s.device} and starting the stream of display #${s.displayId}…")
+                        Text("Connecting to ${s.device} and preparing the stream of display #${s.displayId} (about 10 s)…")
                     }
                     OutlinedButton(onClick = { CastController.stop(context) }) { Text("Cancel") }
                 }
@@ -165,4 +166,39 @@ private fun CastDevicePicker(onPick: (CastDevice) -> Unit, onDismiss: () -> Unit
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
+}
+
+/** Live counters of the running cast: where a pause comes from (the TV, the Wi-Fi or the tablet). */
+@Composable
+private fun CastCounters() {
+    val tablet by CastController.tabletStats.collectAsStateWithLifecycle()
+    val tv by CastController.receiverStats.collectAsStateWithLifecycle()
+    val style = MaterialTheme.typography.bodySmall
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    fun f(v: Float) = String.format(java.util.Locale.US, "%.1f", v)
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            tv?.let {
+                "TV: ${it.player}" + (it.behindS?.let { b -> " · ${f(b)} s behind the newest" } ?: "") +
+                    " · ${it.stalls} pauses · moved back ${it.seeksBack}×"
+            } ?: "TV: waiting for the player…",
+            style = style, color = color
+        )
+        tablet?.let {
+            Text(
+                "Tablet: display ${it.displayFps.toInt()} fps · encoder ${it.drawnFps.toInt()} in / ${it.encodedFps.toInt()} out fps",
+                style = style, color = color
+            )
+            Text(
+                "Stream: ${it.segmentsMade} chunks made, ${it.segmentsSent} sent · last send ${f(it.sendMbps)} Mbit/s",
+                style = style, color = color
+            )
+            if (it.hasSound) {
+                Text(
+                    "Sound: +${f(it.silenceMs / 1_000f)} s silence added, −${f(it.droppedMs / 1_000f)} s dropped",
+                    style = style, color = color
+                )
+            }
+        }
+    }
 }

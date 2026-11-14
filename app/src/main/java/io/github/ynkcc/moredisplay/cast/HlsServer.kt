@@ -33,6 +33,15 @@ class HlsServer(private val segmenter: HlsSegmenter, private val address: InetAd
     var requests = 0
         private set
 
+    /** Segments sent, and the speed of the last one in Mbit/s (diagnostics: Wi-Fi from the tablet to the TV). */
+    @Volatile
+    var segmentsSent = 0
+        private set
+
+    @Volatile
+    var lastSendMbps = 0f
+        private set
+
     /** The playlist URL to give the Chromecast. */
     val playlistUrl: String = "http://${address.hostAddress}:${socket.localPort}/$token/live.m3u8"
 
@@ -87,8 +96,21 @@ class HlsServer(private val segmenter: HlsSegmenter, private val address: InetAd
                     type = "text/plain"
                 }
             }
-            if (body == null) respond(out, 404, "text/plain", null)
-            else respond(out, 200, type, if (method == "HEAD") null else body, length = body.size)
+            if (body == null) {
+                respond(out, 404, "text/plain", null)
+            } else if (type == "video/mp2t" && method == "GET") {
+                val t0 = System.nanoTime()
+                respond(out, 200, type, body, length = body.size)
+                // With linger, close() waits until the TV has received the data (up to 10 s), so the time is
+                // the real transfer time, not just the copy into the socket buffer.
+                runCatching { s.setSoLinger(true, 10) }
+                runCatching { s.close() }
+                val ms = (System.nanoTime() - t0) / 1_000_000.0
+                segmentsSent++
+                if (ms > 0) lastSendMbps = (body.size * 8 / 1_000.0 / ms).toFloat()
+            } else {
+                respond(out, 200, type, if (method == "HEAD") null else body, length = body.size)
+            }
         }.onFailure { Log.d(TAG, "request failed: ${it.message}") }
     }
 

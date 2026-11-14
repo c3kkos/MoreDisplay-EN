@@ -147,7 +147,7 @@ private fun CastSettingsCard() {
             Text("Cast", style = MaterialTheme.typography.titleMedium)
             Text(
                 "Sends a virtual display to a Chromecast at its own resolution, 1:1, while this screen stays free. " +
-                    "Start it from the Displays tab. Expect a delay of about 2 to 5 seconds. " +
+                    "Start it from the Displays tab. The TV shows it with a delay (see Playback). " +
                     "Copy-protected video (Netflix and similar) stays black.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -205,8 +205,8 @@ private fun CastSettingsCard() {
                 )
             }
             Text(
-                "Smooth keeps more video ready on the TV, so Wi-Fi hiccups don't cause pauses (about 2 s more delay). " +
-                    "Low delay shows changes sooner but may pause on a busy network.",
+                "Smooth puts stability first: the TV plays about 10 s behind, with plenty of video in reserve. " +
+                    "Low delay plays about 5 s behind and may pause on a busy network.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
