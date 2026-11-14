@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.8.1-EN (versionCode 14, English edition)
+
+### Fixed
+- **Cast always failed with `CAST-06` "the device isn't on the network any more".** The device list only stays
+  fresh while it's being searched, and MoreDisplay connected to the device only after warming up the stream, when
+  the list was already gone. The device is now connected the moment it's picked (the search stops afterwards); the
+  stream warms up at the same time, and the device is told to play once both are ready.
+- A Cast session ending from an earlier cast (e.g. switching from the Shield to the TV) could stop the new cast:
+  only the session started by the current cast counts now.
+- The app said "Casting to …" before the device had even connected: it now says "Connecting to …" until the device
+  plays the stream, and reports `CAST-06` if the device doesn't accept the connection within 30 s.
+- Stop while a cast was still starting didn't cancel the start-up. Every cast attempt is numbered, so late events
+  from an older attempt can't stop a newer one, and all stopping runs in one place on the main thread.
+- When the TV's player failed, or was stopped from the TV, MoreDisplay kept streaming: it now stops cleanly, or
+  reports `CAST-07` with the reason. The Cast session is also ended if Android closes the cast service.
+- adb `cast`: connects before stopping the device search.
+
+### Changed
+- Audio-only Cast devices (speakers, speaker groups) are no longer listed.
+- The live playlist lists 6 s of stream (was 4 s) and keeps 12 s downloadable, so a short Wi-Fi hiccup on the TV
+  side doesn't stall playback. The delay stays the same.
+
 ## 1.8.0-EN (versionCode 13, English edition)
 
 Maintenance release: no new features and no intended behaviour changes, except the icon.

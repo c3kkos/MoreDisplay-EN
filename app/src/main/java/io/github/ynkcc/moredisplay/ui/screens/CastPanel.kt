@@ -75,7 +75,7 @@ internal fun CastPanel(managed: Map<Int, DisplayInfo>) {
                 is CastState.Starting -> {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Text("Starting to cast display #${s.displayId} to ${s.device}…")
+                        Text("Connecting to ${s.device} and starting the stream of display #${s.displayId}…")
                     }
                     OutlinedButton(onClick = { CastController.stop(context) }) { Text("Cancel") }
                 }
