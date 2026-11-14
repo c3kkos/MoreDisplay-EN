@@ -109,7 +109,12 @@ class CastPipeline(
                 soundNote = "Sound is turned off in Settings → Cast"
             }
 
-            val segmenter = HlsSegmenter(hasAudio = pcmIn != null).also { this.segmenter = it }
+            val segmenter = HlsSegmenter(
+                hasAudio = pcmIn != null,
+                targetUs = config.segmentUs,
+                keep = if (config.smooth) 8 else 12,
+                window = if (config.smooth) 5 else 6
+            ).also { this.segmenter = it }
             val bitrate = config.bitrateFor(width, height)
             val encoder = try {
                 VideoEncoder(width, height, bitrate, config.fps) { data, pts, key -> segmenter.video(data, pts, key) }
@@ -140,9 +145,9 @@ class CastPipeline(
             onHubAttached(frames)
 
             server = HlsServer(segmenter, address).also { it.start() }
-            withTimeoutOrNull(15_000) {
+            withTimeoutOrNull(20_000) {
                 while (segmenter.ready() < 2) delay(100)
-            } ?: throw CastException(CastError.NO_PICTURE, "no video after 15 s (${diagnostics()})")
+            } ?: throw CastException(CastError.NO_PICTURE, "no video after 20 s (${diagnostics()})")
             Log.i(TAG, "display $displayId: ${encoder.width}x${encoder.height} streaming at ${server!!.playlistUrl} (${diagnostics()})")
             return server!!.playlistUrl
         } catch (e: Throwable) {

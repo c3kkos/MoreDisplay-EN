@@ -13,8 +13,13 @@ data class CastConfig(
     val bitrateKbps: Int = 0,
     val fps: Int = 30,
     val sound: Boolean = true,
-    val keepAwake: Boolean = false
+    val keepAwake: Boolean = false,
+    /** Smooth: 2-second segments, so the TV keeps more video in reserve (about 2 s more delay). Low delay: 1 s. */
+    val smooth: Boolean = true
 ) {
+    /** HLS segment length for [smooth]. */
+    val segmentUs: Long get() = if (smooth) 2_000_000L else 1_000_000L
+
     /** Auto: 4 Mbit/s up to 720p, 8 Mbit/s up to 1080p, 12 Mbit/s above. */
     fun bitrateFor(width: Int, height: Int): Int = when {
         bitrateKbps > 0 -> bitrateKbps * 1_000
@@ -44,6 +49,7 @@ object CastSettings {
             ?.putInt("fps", next.fps)
             ?.putBoolean("sound", next.sound)
             ?.putBoolean("keep_awake", next.keepAwake)
+            ?.putBoolean("smooth", next.smooth)
             ?.apply()
         flow.value = next
     }
@@ -63,7 +69,8 @@ object CastSettings {
             bitrateKbps = p.getInt("bitrate_kbps", 0),
             fps = p.getInt("fps", 30),
             sound = p.getBoolean("sound", true),
-            keepAwake = p.getBoolean("keep_awake", false)
+            keepAwake = p.getBoolean("keep_awake", false),
+            smooth = p.getBoolean("smooth", true)
         )
     }
 

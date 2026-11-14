@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.8.2-EN (versionCode 15, English edition)
+
+**Reboot once after updating** (the sound fix is in Android's system process).
+
+### Fixed
+- **No sound on the TV ("failed to register the audio loopback").** On Android 12L, Android's audio service
+  refuses a sound-capture registration that comes from its own system process, even though that process has
+  the permission. The Vector module now answers that one permission check as "allowed", only while MoreDisplay
+  itself is registering the cast sound; every other app's request is checked by Android as before.
+- **Stuttering picture.** The picture now goes to the encoder at a perfectly steady frame rate (the 30 or 60 fps
+  set in Settings), always with the newest picture and with evenly spaced timestamps. Before, frames went out
+  whenever the display drew, at uneven intervals, which TVs show as stutter.
+
+### Added
+- **Settings → Cast → Playback**: *Smooth* (default) sends 2-second segments, so the TV keeps more video in
+  reserve and rides out Wi-Fi hiccups (about 2 s more delay); *Low delay* keeps 1-second segments as before.
+
 ## 1.8.1-EN (versionCode 14, English edition)
 
 ### Fixed
