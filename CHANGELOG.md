@@ -7,6 +7,9 @@ Maintenance release: no new features and no intended behaviour changes, except t
 ### Changed
 - **New launcher icon** from the repository logo (rainbow TV with "MD") on a warm light background, as an adaptive
   icon with a themed (monochrome) layer for Android 13+.
+- **New eye widget look:** a rounded square (stays square at any size), black inside, with a rainbow frame that
+  runs three times around the edge: vivid while the eye is on, washed out while it's off. The eye is bigger
+  (40dp at 1×1, was 32dp), and on Android 12+ a 2×2 or larger widget switches to a large layout (72dp eye).
 - **No main-thread waits on the daemon:** closing the eye and stopping a cast no longer block the screen while
   the daemon answers. Detaching a viewer and stopping cast sound are tied to the caller's token, so a late request
   can never affect a newer viewer or cast.

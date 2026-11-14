@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Eye widget frame while the eye is off: the same rainbow, washed out. The rainbow runs three times around the frame (sweep from the 3 o'clock position). -->
+<gradient xmlns:android="http://schemas.android.com/apk/res/android"
+    android:type="sweep"
+    android:centerX="50"
+    android:centerY="50">
+    <item android:offset="0.0000" android:color="#FF9F566B" />
+    <item android:offset="0.0556" android:color="#FF9F7849" />
+    <item android:offset="0.1111" android:color="#FF9F8F42" />
+    <item android:offset="0.1667" android:color="#FF578D72" />
+    <item android:offset="0.2222" android:color="#FF548AA2" />
+    <item android:offset="0.2778" android:color="#FF755C9E" />
+    <item android:offset="0.3333" android:color="#FF9F566B" />
+    <item android:offset="0.3889" android:color="#FF9F7849" />
+    <item android:offset="0.4444" android:color="#FF9F8F42" />
+    <item android:offset="0.5000" android:color="#FF578D72" />
+    <item android:offset="0.5556" android:color="#FF548AA2" />
+    <item android:offset="0.6111" android:color="#FF755C9E" />
+    <item android:offset="0.6667" android:color="#FF9F566B" />
+    <item android:offset="0.7222" android:color="#FF9F7849" />
+    <item android:offset="0.7778" android:color="#FF9F8F42" />
+    <item android:offset="0.8333" android:color="#FF578D72" />
+    <item android:offset="0.8889" android:color="#FF548AA2" />
+    <item android:offset="0.9444" android:color="#FF755C9E" />
+    <item android:offset="1.0000" android:color="#FF9F566B" />
+</gradient>
