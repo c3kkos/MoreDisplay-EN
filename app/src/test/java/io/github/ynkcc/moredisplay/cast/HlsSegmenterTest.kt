@@ -36,6 +36,31 @@ class HlsSegmenterTest {
     }
 
     @Test
+    fun holdBack_isAnnouncedInThePlaylist() {
+        val seg = HlsSegmenter(hasAudio = false, targetUs = 2_000_000, keep = 12, window = 8, holdBackUs = 8_000_000)
+        feed(seg, 12)
+        val playlist = seg.playlist()!!
+        assertTrue(playlist, playlist.contains("#EXT-X-SERVER-CONTROL:HOLD-BACK=8.0\n"))
+        assertTrue(playlist, playlist.contains("#EXT-X-START:TIME-OFFSET=-8.0\n"))
+        assertEquals(5L, seg.made())
+        // No hold-back: no tags.
+        val plain = HlsSegmenter(hasAudio = false).also { feed(it, 3) }.playlist()!!
+        assertTrue(plain, !plain.contains("HOLD-BACK") && !plain.contains("EXT-X-START"))
+    }
+
+    @Test
+    fun castConfig_stabilitySettings() {
+        val smooth = CastConfig()
+        assertEquals(8_000_000L, smooth.holdBackUs)
+        assertEquals(5, smooth.segmentsBeforePlay)
+        // The player must be able to start hold-back behind the newest segment within what the playlist lists.
+        assertTrue(smooth.playlistWindow * smooth.segmentUs > smooth.holdBackUs)
+        assertTrue(smooth.segmentsKept >= smooth.playlistWindow)
+        val low = CastConfig(smooth = false)
+        assertTrue(low.playlistWindow * low.segmentUs > low.holdBackUs)
+    }
+
+    @Test
     fun castConfig_segmentLength() {
         assertEquals(2_000_000L, CastConfig().segmentUs) // Smooth is the default
         assertEquals(1_000_000L, CastConfig(smooth = false).segmentUs)

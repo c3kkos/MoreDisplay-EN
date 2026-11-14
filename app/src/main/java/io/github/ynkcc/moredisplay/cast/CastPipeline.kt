@@ -71,8 +71,25 @@ class CastPipeline(
     fun diagnostics(): String =
         "display frames ${hub?.framesIn ?: 0}, drawn ${hub?.framesDrawn ?: 0}, " +
             "encoded ${video?.encodedFrames ?: 0}, key frames ${video?.keyFrames ?: 0}, " +
-            "segments ${segmenter?.ready() ?: 0}, requests ${server?.requests ?: 0}"
+            "segments ${segmenter?.made() ?: 0}, requests ${server?.requests ?: 0}, " +
+            "sent ${server?.segmentsSent ?: 0} (last ${String.format(java.util.Locale.US, "%.1f", server?.lastSendMbps ?: 0f)} Mbit/s), " +
+            "sound fixes +${audio?.silenceMs ?: 0} ms silence / -${audio?.droppedMs ?: 0} ms dropped"
     private var soundOn = false
+
+    /** The tablet side's counters, for the cast card and the log. */
+    class Counters(
+        val framesIn: Long, val framesDrawn: Long, val framesEncoded: Long, val segmentsMade: Long,
+        val requests: Int, val segmentsSent: Int, val sendMbps: Float, val silenceMs: Long, val droppedMs: Long,
+        val hasSound: Boolean
+    )
+
+    fun counters(): Counters = Counters(
+        framesIn = hub?.framesIn ?: 0, framesDrawn = hub?.framesDrawn ?: 0,
+        framesEncoded = video?.encodedFrames ?: 0, segmentsMade = segmenter?.made() ?: 0,
+        requests = server?.requests ?: 0, segmentsSent = server?.segmentsSent ?: 0,
+        sendMbps = server?.lastSendMbps ?: 0f, silenceMs = audio?.silenceMs ?: 0, droppedMs = audio?.droppedMs ?: 0,
+        hasSound = audio != null
+    )
 
     /** Why there's no sound on the TV, if there isn't. */
     var soundNote: String? = null
@@ -112,8 +129,9 @@ class CastPipeline(
             val segmenter = HlsSegmenter(
                 hasAudio = pcmIn != null,
                 targetUs = config.segmentUs,
-                keep = if (config.smooth) 8 else 12,
-                window = if (config.smooth) 5 else 6
+                keep = config.segmentsKept,
+                window = config.playlistWindow,
+                holdBackUs = config.holdBackUs
             ).also { this.segmenter = it }
             val bitrate = config.bitrateFor(width, height)
             val encoder = try {
@@ -145,9 +163,15 @@ class CastPipeline(
             onHubAttached(frames)
 
             server = HlsServer(segmenter, address).also { it.start() }
-            withTimeoutOrNull(20_000) {
-                while (segmenter.ready() < 2) delay(100)
-            } ?: throw CastException(CastError.NO_PICTURE, "no video after 20 s (${diagnostics()})")
+            // Enough segments for the TV to start well behind the newest one (a player at the newest edge pauses
+            // at every segment).
+            val wanted = config.segmentsBeforePlay
+            val waitMs = 15_000 + wanted * config.segmentUs / 1_000
+            withTimeoutOrNull(waitMs) {
+                while (segmenter.ready() < wanted) delay(100)
+            } ?: throw CastException(
+                CastError.NO_PICTURE, "only ${segmenter.ready()} of $wanted segments after ${waitMs / 1_000} s (${diagnostics()})"
+            )
             Log.i(TAG, "display $displayId: ${encoder.width}x${encoder.height} streaming at ${server!!.playlistUrl} (${diagnostics()})")
             return server!!.playlistUrl
         } catch (e: Throwable) {

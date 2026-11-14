@@ -114,17 +114,39 @@ class CastService : Service() {
     }
 
     /**
-     * While casting: logs the pipeline's counters every 10 s, and stops with CAST-08 if the Chromecast hasn't
-     * fetched anything from the tablet 30 s after it was told to play (network or Wi-Fi isolation problem).
+     * While casting: updates the cast card's counters every 2 s, logs them every 10 s, and stops with CAST-08 if the
+     * Chromecast hasn't fetched anything from the tablet 30 s after it was told to play (network or Wi-Fi isolation
+     * problem).
      */
     private suspend fun watch(cast: CastPipeline) {
-        var seconds = 0
+        val stepMs = 2_000L
+        var elapsedMs = 0L
+        var previous = cast.counters()
         while (pipeline === cast) {
-            kotlinx.coroutines.delay(10_000)
-            seconds += 10
+            kotlinx.coroutines.delay(stepMs)
+            elapsedMs += stepMs
             if (pipeline !== cast) return
-            Log.i(TAG, "cast stats after ${seconds}s: ${cast.diagnostics()}")
-            if (seconds >= 30 && cast.streamRequests == 0) {
+            val now = cast.counters()
+            val perSecond = 1_000f / stepMs
+            CastController.setTabletStats(
+                TabletStats(
+                    displayFps = (now.framesIn - previous.framesIn) * perSecond,
+                    drawnFps = (now.framesDrawn - previous.framesDrawn) * perSecond,
+                    encodedFps = (now.framesEncoded - previous.framesEncoded) * perSecond,
+                    segmentsMade = now.segmentsMade,
+                    segmentsSent = now.segmentsSent,
+                    requests = now.requests,
+                    sendMbps = now.sendMbps,
+                    hasSound = now.hasSound,
+                    silenceMs = now.silenceMs,
+                    droppedMs = now.droppedMs
+                )
+            )
+            previous = now
+            if (elapsedMs % 10_000 == 0L) {
+                Log.i(TAG, "cast stats after ${elapsedMs / 1_000}s: ${cast.diagnostics()} | ${CastController.receiverSummary()}")
+            }
+            if (elapsedMs >= 30_000 && cast.streamRequests == 0) {
                 fail(
                     CastError.NOT_REACHED.format(
                         "no request in 30 s; check that the tablet and the Chromecast are on the same network " +

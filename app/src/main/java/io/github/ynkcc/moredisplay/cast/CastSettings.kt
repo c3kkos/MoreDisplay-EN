@@ -14,11 +14,24 @@ data class CastConfig(
     val fps: Int = 30,
     val sound: Boolean = true,
     val keepAwake: Boolean = false,
-    /** Smooth: 2-second segments, so the TV keeps more video in reserve (about 2 s more delay). Low delay: 1 s. */
+    /** Smooth (stability first, about 10 s of delay) or Low delay (about 5 s, may pause on a busy network). */
     val smooth: Boolean = true
 ) {
-    /** HLS segment length for [smooth]. */
+    /** HLS segment length. */
     val segmentUs: Long get() = if (smooth) 2_000_000L else 1_000_000L
+
+    /** How far behind the newest segment the TV should play (see HlsSegmenter). */
+    val holdBackUs: Long get() = if (smooth) 8_000_000L else 4_000_000L
+
+    /** Segments listed in the playlist and kept downloadable. */
+    val playlistWindow: Int get() = 8
+    val segmentsKept: Int get() = if (smooth) 12 else 16
+
+    /** Segments to have ready before telling the TV to play, so it can start [holdBackUs] back. */
+    val segmentsBeforePlay: Int get() = 5
+
+    /** How far StallGuard moves a player back that keeps pausing at the newest edge. */
+    val stallBackMs: Long get() = if (smooth) 6_000L else 3_000L
 
     /** Auto: 4 Mbit/s up to 720p, 8 Mbit/s up to 1080p, 12 Mbit/s above. */
     fun bitrateFor(width: Int, height: Int): Int = when {

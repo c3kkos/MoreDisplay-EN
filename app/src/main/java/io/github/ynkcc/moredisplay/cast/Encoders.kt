@@ -125,8 +125,9 @@ class VideoEncoder(
 
 /**
  * AAC-LC encoder for the cast sound: reads 48 kHz stereo 16-bit PCM from the pipe filled by system_server and
- * emits ADTS frames. When no sound comes (nothing playing), it encodes silence so the stream never stalls.
- * Timestamps follow the same clock as the video (`System.nanoTime`).
+ * emits ADTS frames. Timestamps follow the same clock as the video (`System.nanoTime`) and form one gapless track
+ * ([AudioTimeline]): silence fills the time when nothing plays, and a backlog is dropped instead of being stamped
+ * ahead of the clock.
  */
 class AudioEncoder(
     private val pipe: ParcelFileDescriptor,
@@ -169,38 +170,38 @@ class AudioEncoder(
         runCatching { codec.release() }
     }
 
+    /** Gapless sound timestamps (see [AudioTimeline]); created when the feeder starts. */
+    @Volatile
+    private var timeline: AudioTimeline? = null
+
+    /** Silence added and sound dropped to keep the track gapless, in ms (diagnostics). */
+    val silenceMs: Long get() = timeline?.silenceMs ?: 0
+    val droppedMs: Long get() = timeline?.droppedMs ?: 0
+
     private fun feedLoop() {
         val chunk = ByteArray(CHUNK)
-        var anchorUs = System.nanoTime() / 1_000
-        var samples = 0L // per channel, since anchorUs
+        val silence = ByteArray(CHUNK)
+        val tl = AudioTimeline(System.nanoTime() / 1_000, SAMPLE_RATE, CHANNELS * 2).also { timeline = it }
         while (running) {
             val nowUs = System.nanoTime() / 1_000
-            val producedUs = anchorUs + samples * 1_000_000 / SAMPLE_RATE
             val available = runCatching { input.available() }.getOrElse { break }
-            var n = 0
-            if (available >= 4) {
-                n = runCatching { input.read(chunk, 0, minOf(available, chunk.size) and 3.inv()) }.getOrElse { break }
+            if (available >= CHANNELS * 2) {
+                val n = runCatching { input.read(chunk, 0, minOf(available, chunk.size) and 3.inv()) }.getOrElse { break }
                 if (n < 0) break
-            }
-            if (n == 0) {
-                if (nowUs - producedUs > 200_000) {
-                    // Nothing playing for 200 ms: 20 ms of silence keeps the stream going.
-                    chunk.fill(0)
-                    n = CHUNK
-                } else {
-                    Thread.sleep(5)
-                    continue
+                val keep = tl.admit(n, nowUs)
+                if (keep > 0) {
+                    queue(chunk, n - keep, keep, tl.nextUs)
+                    tl.advance(keep)
                 }
+                continue
             }
-            var ptsUs = producedUs
-            if (kotlin.math.abs(ptsUs - nowUs) > 300_000) {
-                // The sound clock drifted from the video clock: re-anchor on it.
-                anchorUs = nowUs
-                samples = 0
-                ptsUs = nowUs
+            val gap = tl.silenceNeeded(nowUs, silence.size)
+            if (gap > 0) {
+                queue(silence, 0, gap, tl.nextUs)
+                tl.advance(gap, silence = true)
+            } else {
+                Thread.sleep(5)
             }
-            queue(chunk, n, ptsUs)
-            samples += n / (CHANNELS * 2)
         }
         runCatching {
             val index = codec.dequeueInputBuffer(100_000)
@@ -208,18 +209,18 @@ class AudioEncoder(
         }
     }
 
-    private fun queue(data: ByteArray, length: Int, ptsUs: Long) {
-        var offset = 0
-        while (offset < length && running) {
+    private fun queue(data: ByteArray, start: Int, length: Int, ptsUs: Long) {
+        var done = 0
+        while (done < length && running) {
             val index = runCatching { codec.dequeueInputBuffer(20_000) }.getOrElse { return }
             if (index < 0) continue
             val buffer = codec.getInputBuffer(index) ?: return
             buffer.clear()
-            val count = minOf(buffer.remaining(), length - offset)
-            buffer.put(data, offset, count)
-            val pts = ptsUs + (offset / (CHANNELS * 2)) * 1_000_000L / SAMPLE_RATE
+            val count = minOf(buffer.remaining(), length - done) and 3.inv()
+            buffer.put(data, start + done, count)
+            val pts = ptsUs + (done / (CHANNELS * 2)) * 1_000_000L / SAMPLE_RATE
             codec.queueInputBuffer(index, 0, count, pts, 0)
-            offset += count
+            done += count
         }
     }
 

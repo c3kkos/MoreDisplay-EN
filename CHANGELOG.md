@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.8.3-beta1-EN (versionCode 16, English edition, beta)
+
+Beta for testing the cast fixes below; published as a pre-release, not as the latest version.
+
+### Fixed
+- **The TV paused every 2–3 seconds while casting** (every second in 1.8.1). The TV's player started playing at
+  the newest edge of the stream: a segment can only be downloaded once it's finished, so it ran out at every
+  segment. Now, with the default *Smooth* playback:
+  - the TV is told to play only once 5 segments (10 s) are ready;
+  - the playlist asks players to stay 8 s behind the newest segment (standard `HOLD-BACK` and `EXT-X-START`
+    tags);
+  - if the TV still pauses twice within 20 s, MoreDisplay moves it 6 s back, which gives it a reserve it keeps
+    from then on.
+  The delay is about 10 s (Smooth) or about 5 s (Low delay).
+- **Sound track without holes:** the cast sound's timestamps no longer jump when the sound clock drifts. The
+  startup backlog is dropped and silence fills the gaps, so the track is always continuous (a hole in the sound
+  makes the TV's player pause).
+
+### Added
+- **Live counters on the cast card** (Displays tab) while casting: what the TV's player is doing, how far behind
+  the newest point it plays, its pauses and how often it was moved back; the display's and encoder's frame rates;
+  segments made and sent with the Wi-Fi speed of the last one; and the sound corrections. The same numbers are in
+  the log (`MoreDisplay_Cast`) every 10 s.
+
+### Changed
+- Beta versions are published as GitHub pre-releases and aren't sent to the module repository.
+
 ## 1.8.2-EN (versionCode 15, English edition)
 
 **Reboot once after updating** (the sound fix is in Android's system process).

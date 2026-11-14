@@ -92,18 +92,22 @@ jobs:
 
           EOF
           sed -i 's/^          //' out/notes-header.md
+          # Beta tags (e.g. v1.8.3-beta1-en) become pre-releases: never "latest", not sent to the module repository.
+          PRE=()
+          if [[ "$TAG" == *beta* ]]; then PRE=(--prerelease --latest=false); fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             # Re-running for an existing tag refreshes its page and files instead of failing.
             gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$TAG" --jq .body \
               > out/generated.md || : > out/generated.md
             cat out/notes-header.md out/generated.md > out/notes-full.md
-            gh release edit "$TAG" --title "$TITLE" --notes-file out/notes-full.md
+            gh release edit "$TAG" --title "$TITLE" --notes-file out/notes-full.md "${PRE[@]}"
             gh release upload "$TAG" out/*.apk --clobber
           else
             gh release create "$TAG" \
               --title "$TITLE" \
               --notes-file out/notes-header.md \
               --generate-notes \
+              "${PRE[@]}" \
               out/*.apk
           fi
           gh release view "$TAG" --json body --jq .body > out/release-notes.md
@@ -146,6 +150,10 @@ jobs:
       - name: Publish to Xposed-Modules-Repo
         run: |
           set -euo pipefail
+          if [[ "$RELEASE_TAG" == *beta* ]]; then
+            echo "Beta release: not published to Xposed-Modules-Repo."
+            exit 0
+          fi
           if [ -z "${GH_TOKEN:-}" ]; then
             echo "LSPOSED_REPO_TOKEN is not set, skipping publish to Xposed-Modules-Repo."
             exit 0
