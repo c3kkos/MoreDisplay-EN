@@ -6,6 +6,8 @@ import java.util.Locale
 /**
  * Cuts the encoded stream into short MPEG-TS segments and serves a live HLS playlist over them (sliding window).
  * A new segment starts at the first key frame after [targetUs]; the encoder makes a key frame every second.
+ * The playlist lists the last [window] segments (6 s, so a Wi-Fi hiccup on the TV side doesn't stall it) and
+ * [keep] segments stay downloadable for a player that is a little behind.
  * Pure Kotlin (unit-tested); thread-safe.
  *
  * Timestamps come in microseconds on any clock; they are rebased to start at 1 s in 90 kHz units.
@@ -13,8 +15,8 @@ import java.util.Locale
 class HlsSegmenter(
     private val hasAudio: Boolean,
     private val targetUs: Long = 1_000_000,
-    private val keep: Int = 8,
-    private val window: Int = 4
+    private val keep: Int = 12,
+    private val window: Int = 6
 ) {
     class Segment(val sequence: Long, val durationUs: Long, val bytes: ByteArray)
 

@@ -277,13 +277,14 @@ class CommandActivity : Activity() {
                         val device = withTimeoutOrNull(15_000) {
                             cast.devices.first { list -> list.any { it.id == routeId } }.first { it.id == routeId }
                         }
-                        withContext(Dispatchers.Main) { cast.stopDiscovery(app) }
+                        // Connect while the search is still running, then stop searching.
+                        withContext(Dispatchers.Main) {
+                            if (device != null) cast.start(this@CommandActivity, device, displayId)
+                            cast.stopDiscovery(app)
+                        }
                         device ?: throw IllegalStateException(
                             "${CastSettings.lastDeviceName() ?: "the last Cast device"} wasn't found on the network"
                         )
-                        withContext(Dispatchers.Main) {
-                            cast.start(this@CommandActivity, device, displayId)
-                        }
                         "casting display $displayId to ${device.name}"
                     }
                     else -> throw IllegalArgumentException("--es state must be on or off")

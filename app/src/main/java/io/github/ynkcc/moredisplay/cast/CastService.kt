@@ -33,41 +33,63 @@ class CastService : Service() {
         private const val TAG = "MoreDisplay_Cast"
         const val ACTION_START = "io.github.ynkcc.moredisplay.cast.START"
         const val ACTION_STOP = "io.github.ynkcc.moredisplay.cast.STOP"
+        const val EXTRA_ATTEMPT = "attempt"
         const val EXTRA_DISPLAY_ID = "display_id"
-        const val EXTRA_ROUTE_ID = "route_id"
         const val EXTRA_ROUTE_NAME = "route_name"
         private const val CHANNEL = "cast"
         private const val NOTIFICATION_ID = 42
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
     private var job: Job? = null
+    private var watcher: Job? = null
     private var pipeline: CastPipeline? = null
     private var wakeLock: PowerManager.WakeLock? = null
+
+    /** The cast attempt this service runs (see CastController), or -1. */
+    private var attemptId = -1
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
+                val attempt = intent.getIntExtra(EXTRA_ATTEMPT, -1)
                 val displayId = intent.getIntExtra(EXTRA_DISPLAY_ID, -1)
-                val routeId = intent.getStringExtra(EXTRA_ROUTE_ID)
                 val routeName = intent.getStringExtra(EXTRA_ROUTE_NAME) ?: "Chromecast"
-                goForeground("Starting to cast display #$displayId to $routeName…")
-                if (displayId < 0 || routeId == null) {
+                goForeground("Connecting to $routeName to cast display #$displayId…")
+                if (displayId < 0 || attempt < 0) {
                     fail(CastError.DISPLAY_MISSING.format("no display or Cast device was given"))
                 } else {
-                    begin(displayId, routeId, routeName)
+                    begin(attempt, displayId, routeName)
                 }
             }
-            else -> finish(null)
+            else -> finish(null) // Stop (notification, app or adb): also cancels a cast that is still starting
         }
         return START_NOT_STICKY
     }
 
-    private fun begin(displayId: Int, routeId: String, routeName: String) {
-        job?.cancel()
-        teardown()
+    /**
+     * Runs attempt [attempt]: the device is already being connected by CastController; here the stream warms up,
+     * then CastController plays it once the device is connected. Everything that stops the cast goes through
+     * [finish] on the main thread.
+     */
+    private fun begin(attempt: Int, displayId: Int, routeName: String) {
+        stopWork()
+        attemptId = attempt
+        CastController.bind(
+            attempt,
+            onPlaying = { soundNote ->
+                if (attemptId == attempt) {
+                    CastController.setState(CastState.Casting(displayId, routeName, soundNote))
+                    goForeground("Casting display #$displayId to $routeName")
+                    pipeline?.let { cast -> watcher = scope.launch { watch(cast) } }
+                }
+            },
+            onFailure = { message -> if (attemptId == attempt) fail(message) },
+            onEnded = { if (attemptId == attempt) finish(null) }
+        )
         job = scope.launch {
             try {
                 val repo = App.displays()
@@ -79,14 +101,7 @@ class CastService : Service() {
                 val cast = CastPipeline(this@CastService, displayId, info.spec.width, info.spec.height, config)
                 pipeline = cast
                 val url = cast.start { hub -> CastController.setHub(displayId, hub) }
-                CastController.connectAndPlay(
-                    this@CastService, routeId, displayId, url,
-                    onFailure = { fail(it) },
-                    onEnded = { finish(null) }
-                )
-                CastController.setState(CastState.Casting(displayId, routeName, cast.soundNote))
-                goForeground("Casting display #$displayId to $routeName")
-                watch(cast)
+                CastController.play(attempt, url, cast.soundNote)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -126,19 +141,32 @@ class CastService : Service() {
         finish(CastState.Failed(message))
     }
 
+    /** Stops everything (from any thread; runs on the main thread, once per attempt). */
     private fun finish(failure: CastState?) {
-        CastController.endSession(this)
+        main.post {
+            val attempt = attemptId
+            stopWork()
+            if (attempt >= 0) CastController.finish(this, attempt)
+            CastController.setState(failure ?: CastState.Idle)
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
+    }
+
+    /** Cancels the start-up and the watcher and releases the stream (the Cast session is CastController's). */
+    private fun stopWork() {
+        attemptId = -1
+        job?.cancel()
+        job = null
+        watcher?.cancel()
+        watcher = null
         teardown()
-        CastController.setState(failure ?: CastState.Idle)
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
     }
 
     private fun teardown() {
         val cast = pipeline
         pipeline = null
-        // Order matters: first give the display its sink back and release the hub, then tell an open eye that the
-        // hub is gone, so it re-attaches to the daemon afterwards (not before, or the detach would hit the eye).
+        // The cast's detach is tied to its token, so an open eye that re-attaches right after can't be hit by it.
         cast?.stop()
         CastController.setHub(-1, null)
         wakeLock?.let { if (it.isHeld) it.release() }
@@ -153,7 +181,9 @@ class CastService : Service() {
     }
 
     override fun onDestroy() {
-        teardown()
+        val attempt = attemptId
+        stopWork()
+        if (attempt >= 0) CastController.finish(this, attempt)
         scope.cancel()
         super.onDestroy()
     }
