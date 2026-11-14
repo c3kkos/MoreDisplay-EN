@@ -29,14 +29,6 @@ object ProviderRpc {
     const val EXTRA_REQUEST = "request"
     const val EXTRA_RESPONSE = "response"
 
-    /** Eye: the viewer's Surface (Parcelable) and binder token, next to an AttachViewer request. */
-    const val EXTRA_VIEWER_SURFACE = "viewer_surface"
-    const val EXTRA_VIEWER_TOKEN = "viewer_token"
-
-    /** A pipe end (ParcelFileDescriptor) and binder token, next to StartAudioCapture or OpenTouchChannel. */
-    const val EXTRA_PIPE = "pipe"
-    const val EXTRA_PIPE_TOKEN = "pipe_token"
-
     private const val TAG = "MoreDisplay_ProviderRpc"
 
     /**
@@ -49,25 +41,19 @@ object ProviderRpc {
         val callingUid = Binder.getCallingUid()
         val response = runCatching {
             val request = RpcCodec.unmarshallRequest(payload)
-            // The eye's surface and the cast sound pipe give access to hidden displays and to other apps' sound:
-            // only MoreDisplay itself may ask for them.
-            if ((request is RpcRequest.AttachViewer || request is RpcRequest.StartAudioCapture ||
-                    request is RpcRequest.OpenTouchChannel) &&
-                !isTrustedViewer(callingUid)
-            ) {
+            // The eye's surface, cast sound and touch control give access to hidden displays and to other apps'
+            // sound and input: only MoreDisplay itself may use them.
+            if (request.isMoreDisplayOnly() && !isTrustedViewer(callingUid)) {
                 Log.w(TAG, "${request.javaClass.simpleName} refused for uid=$callingUid (not MoreDisplay)")
                 return responseBundle(
                     RpcResponse.Error(request.id, 11, "${request.javaClass.simpleName} is only allowed for MoreDisplay")
                 )
             }
-            val viewer = if (request is RpcRequest.AttachViewer) viewerFrom(extras) else null
-            val pipe = if (request is RpcRequest.StartAudioCapture || request is RpcRequest.OpenTouchChannel) {
-                pipeFrom(extras)
-            } else null
+            val sideChannel = RpcExtras.from(extras)
             // The caller identity must be cleared: otherwise DMS checks permissions against the calling app's uid and refuses to create the display.
             val identity = Binder.clearCallingIdentity()
             try {
-                handleRequest(engine, request, viewer, pipe)
+                handleRequest(engine, request, sideChannel)
             } finally {
                 Binder.restoreCallingIdentity(identity)
             }
@@ -78,28 +64,18 @@ object ProviderRpc {
         return responseBundle(response)
     }
 
-    /** Unpacks the viewer surface and token sent next to an AttachViewer request (both channels). */
-    @Suppress("DEPRECATION")
-    fun viewerFrom(extras: Bundle): ViewerAttachment? {
-        extras.classLoader = android.view.Surface::class.java.classLoader
-        val surface = extras.getParcelable<android.view.Surface>(EXTRA_VIEWER_SURFACE) ?: return null
-        val token = extras.getBinder(EXTRA_VIEWER_TOKEN) ?: return null
-        return ViewerAttachment(surface, token)
-    }
-
-    /** Unpacks the cast sound pipe and token sent next to a StartAudioCapture request. */
-    @Suppress("DEPRECATION")
-    fun pipeFrom(extras: Bundle): PipeAttachment? {
-        extras.classLoader = android.os.ParcelFileDescriptor::class.java.classLoader
-        val pipe = extras.getParcelable<android.os.ParcelFileDescriptor>(EXTRA_PIPE) ?: return null
-        val token = extras.getBinder(EXTRA_PIPE_TOKEN) ?: return null
-        return PipeAttachment(pipe, token)
-    }
-
     fun errorBundle(code: Int, message: String): Bundle =
         responseBundle(RpcResponse.Error(0, code, message))
 
     private fun responseBundle(response: RpcResponse): Bundle = Bundle().apply {
         putByteArray(EXTRA_RESPONSE, RpcCodec.marshallResponse(response))
     }
+}
+
+/** Requests about the eye, cast and touch control, which only MoreDisplay itself may send. */
+private fun RpcRequest.isMoreDisplayOnly(): Boolean = when (this) {
+    is RpcRequest.AttachViewer, is RpcRequest.DetachViewer,
+    is RpcRequest.StartAudioCapture, is RpcRequest.StopAudioCapture,
+    is RpcRequest.OpenTouchChannel -> true
+    else -> false
 }

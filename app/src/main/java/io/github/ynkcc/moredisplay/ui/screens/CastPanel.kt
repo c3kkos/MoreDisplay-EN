@@ -38,6 +38,7 @@ import io.github.ynkcc.moredisplay.cast.CastDevice
 import io.github.ynkcc.moredisplay.cast.CastSettings
 import io.github.ynkcc.moredisplay.cast.CastState
 import io.github.ynkcc.moredisplay.core.DisplayInfo
+import androidx.compose.foundation.text.selection.SelectionContainer
 
 /** Top of the Displays tab: cast the display picked in Settings → Cast to a Chromecast, or stop. */
 @Composable
@@ -81,7 +82,7 @@ internal fun CastPanel(managed: Map<Int, DisplayInfo>) {
                 else -> {
                     if (s is CastState.Failed) {
                         // Selectable, so the error code and details can be copied into a bug report.
-                        androidx.compose.foundation.text.selection.SelectionContainer {
+                        SelectionContainer {
                             Text(s.message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                         }
                         Text(

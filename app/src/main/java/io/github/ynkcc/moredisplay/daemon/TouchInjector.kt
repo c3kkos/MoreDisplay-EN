@@ -104,7 +104,7 @@ class TouchInjector(
     private fun back() {
         // Keys go to the focused window of their display: give the virtual display's top task focus first.
         cancelFocusReturn()
-        topTaskOn(displayId)?.let { setFocusedTask(it) }
+        runCatching { HiddenApi.topTaskOn(displayId) }.getOrNull()?.let { setFocusedTask(it) }
         val now = SystemClock.uptimeMillis()
         for (action in intArrayOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
             val key = KeyEvent(
@@ -117,10 +117,8 @@ class TouchInjector(
     }
 
     private fun inject(event: InputEvent) {
-        runCatching {
-            InputInjection.setDisplayId(event, displayId)
-            InputInjection.inject(event)
-        }.onFailure { Log.e(tag, "inject into display $displayId failed", it) }
+        runCatching { HiddenApi.injectInput(event, displayId) }
+            .onFailure { Log.e(tag, "inject into display $displayId failed: ${it.message}") }
     }
 
     private fun scheduleFocusReturn(delayMs: Long) {
@@ -139,46 +137,8 @@ class TouchInjector(
     }
 
     private fun setFocusedTask(taskId: Int) {
-        runCatching {
-            val atm = Class.forName("android.app.ActivityTaskManager").getMethod("getService").invoke(null)!!
-            atm.javaClass.getMethod("setFocusedTask", Int::class.javaPrimitiveType).invoke(atm, taskId)
-        }.onFailure { Log.w(tag, "setFocusedTask($taskId) failed: ${it.message}") }
+        runCatching { HiddenApi.setFocusedTask(taskId) }
     }
-
-    private fun topTaskOn(display: Int): Int? = runCatching {
-        val atm = Class.forName("android.app.ActivityTaskManager").getMethod("getService").invoke(null)!!
-        val tasks = atm.javaClass.getMethod("getAllRootTaskInfosOnDisplay", Int::class.javaPrimitiveType)
-            .invoke(atm, display) as List<*>
-        tasks.firstOrNull { info ->
-            info != null && (runCatching { info.javaClass.getField("visible").getBoolean(info) }.getOrNull()
-                ?: runCatching { info.javaClass.getField("isVisible").getBoolean(info) }.getOrDefault(true))
-        }?.let { it.javaClass.getField("taskId").getInt(it) }
-    }.getOrNull()
-}
-
-/** Hidden input APIs, by reflection (InputManagerGlobal on Android 14+, InputManager before). */
-internal object InputInjection {
-    private const val ASYNC = 0 // InputManager.INJECT_INPUT_EVENT_MODE_ASYNC
-
-    private val injector: Pair<Any, java.lang.reflect.Method> by lazy {
-        val global = runCatching { Class.forName("android.hardware.input.InputManagerGlobal") }.getOrNull()
-        val instance = if (global != null) {
-            global.getMethod("getInstance").invoke(null)
-        } else {
-            Class.forName("android.hardware.input.InputManager").getMethod("getInstance").invoke(null)
-        } ?: throw IllegalStateException("no InputManager instance")
-        instance to instance.javaClass.getMethod("injectInputEvent", InputEvent::class.java, Int::class.javaPrimitiveType)
-    }
-
-    private val setDisplay: java.lang.reflect.Method by lazy {
-        InputEvent::class.java.getMethod("setDisplayId", Int::class.javaPrimitiveType)
-    }
-
-    fun setDisplayId(event: InputEvent, displayId: Int) {
-        setDisplay.invoke(event, displayId)
-    }
-
-    fun inject(event: InputEvent): Boolean = injector.second.invoke(injector.first, event, ASYNC) as Boolean
 }
 
 /** One touch channel per managed display (a new viewer replaces the previous channel). */

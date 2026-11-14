@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
+import io.github.ynkcc.moredisplay.daemon.RpcExtras
 import kotlinx.coroutines.runBlocking
 import io.github.ynkcc.moredisplay.core.ConnectionStatus
 import io.github.ynkcc.moredisplay.core.DisplayInfo
@@ -246,25 +247,53 @@ class DisplayRepository : IDisplayRepository {
 
     override fun displayOrigin(displayId: Int): Privilege? = origin.value[displayId]
 
-    // ---- Eye: show a managed display in the PiP viewer (routed to the channel that owns the display) ----
+    // ---- Eye, touch control and cast: requests with a surface, token or pipe next to them ----
 
-    /** Sends [displayId]'s frames to [surface]; [token] lets the daemon notice if the viewer dies. */
-    suspend fun attachViewer(displayId: Int, surface: android.view.Surface, token: android.os.IBinder): Result<Unit> =
-        withContext(slotDispatcher) {
-            val viewer = android.os.Bundle().apply {
-                putParcelable(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_VIEWER_SURFACE, surface)
-                putBinder(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_VIEWER_TOKEN, token)
-            }
-            var last: RpcResponse? = null
-            for (slot in orderedSlotsFor(displayId)) {
-                val response = runCatching {
-                    slot.transport.sendWithExtras(RpcRequest.AttachViewer(nextId(), displayId), viewer)
-                }.getOrElse { RpcResponse.Error(0, -1, "rpc failed: ${it.message}") }
-                if (response is RpcResponse.Ok) return@withContext Result.success(Unit)
-                last = response
-            }
-            Result.failure(IllegalStateException("attachViewer $displayId: ${last?.message() ?: "not connected"}"))
+    /**
+     * Sends [build]'s request with [extras] to the channel that owns [displayId] (then the others), and returns
+     * the first non-error response, or the last error. Shared by the eye, touch control and the cast.
+     */
+    private suspend fun sendToDisplayOwner(
+        displayId: Int,
+        extras: RpcExtras,
+        build: () -> RpcRequest
+    ): RpcResponse = withContext(slotDispatcher) {
+        val bundle = extras.toBundle()
+        var last: RpcResponse = RpcResponse.Error(0, -1, "not connected")
+        for (slot in orderedSlotsFor(displayId)) {
+            val response = runCatching { slot.transport.sendWithExtras(build(), bundle) }
+                .getOrElse { RpcResponse.Error(0, -1, "rpc failed: ${it.message}") }
+            if (response !is RpcResponse.Error) return@withContext response
+            last = response
         }
+        last
+    }
+
+    private fun RpcResponse.toUnitResult(what: String): Result<Unit> =
+        if (this is RpcResponse.Error) Result.failure(IllegalStateException("$what: ${message()}"))
+        else Result.success(Unit)
+
+    /** Eye on: sends [displayId]'s frames to [surface]; [token] lets the daemon notice if the viewer dies. */
+    suspend fun attachViewer(displayId: Int, surface: android.view.Surface, token: android.os.IBinder): Result<Unit> =
+        sendToDisplayOwner(displayId, RpcExtras(surface = surface, token = token)) {
+            RpcRequest.AttachViewer(nextId(), displayId)
+        }.toUnitResult("attachViewer $displayId")
+
+    /**
+     * Eye off: sends [displayId]'s frames back to its sink, only if [token]'s viewer is still the attached one
+     * (so a late detach never hits a newer viewer).
+     */
+    suspend fun detachViewer(displayId: Int, token: android.os.IBinder): Result<Unit> =
+        sendToDisplayOwner(displayId, RpcExtras(token = token)) {
+            RpcRequest.DetachViewer(nextId(), displayId)
+        }.toUnitResult("detachViewer $displayId")
+
+    /** [detachViewer] without waiting for the answer (safe because the detach is tied to [token]). */
+    fun detachViewerLater(displayId: Int, token: android.os.IBinder) {
+        scope.launch {
+            detachViewer(displayId, token).onFailure { Log.w(TAG, "late detach of display $displayId: ${it.message}") }
+        }
+    }
 
     /**
      * Touch control: the daemon that owns [displayId] injects the events written into [pipe] (a pipe's read end)
@@ -275,32 +304,10 @@ class DisplayRepository : IDisplayRepository {
         pipe: android.os.ParcelFileDescriptor,
         token: android.os.IBinder,
         viewerTaskId: Int
-    ): Result<Unit> = withContext(slotDispatcher) {
-        val extras = android.os.Bundle().apply {
-            putParcelable(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_PIPE, pipe)
-            putBinder(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_PIPE_TOKEN, token)
-        }
-        var last: RpcResponse? = null
-        for (slot in orderedSlotsFor(displayId)) {
-            val response = runCatching {
-                slot.transport.sendWithExtras(RpcRequest.OpenTouchChannel(nextId(), displayId, viewerTaskId), extras)
-            }.getOrElse { RpcResponse.Error(0, -1, "rpc failed: ${it.message}") }
-            if (response is RpcResponse.Ok) return@withContext Result.success(Unit)
-            last = response
-        }
-        Result.failure(IllegalStateException("touch control for display $displayId: ${last?.message() ?: "not connected"}"))
-    }
-
-    /** Sends [displayId]'s frames back to its sink. */
-    suspend fun detachViewer(displayId: Int): Result<Unit> = withContext(slotDispatcher) {
-        var last: RpcResponse? = null
-        for (slot in orderedSlotsFor(displayId)) {
-            val response = sendOn(slot) { RpcRequest.DetachViewer(nextId(), displayId) }
-            if (response is RpcResponse.Ok) return@withContext Result.success(Unit)
-            last = response
-        }
-        Result.failure(IllegalStateException("detachViewer $displayId: ${last?.message() ?: "not connected"}"))
-    }
+    ): Result<Unit> =
+        sendToDisplayOwner(displayId, RpcExtras(token = token, pipe = pipe)) {
+            RpcRequest.OpenTouchChannel(nextId(), displayId, viewerTaskId)
+        }.toUnitResult("touch control for display $displayId")
 
     /**
      * Cast sound on: the sound of the apps set to "Open on" [displayId] is written into [pipe] (a pipe's write
@@ -313,22 +320,31 @@ class DisplayRepository : IDisplayRepository {
     ): Result<List<Int>> = withContext(slotDispatcher) {
         val slot = slots[Privilege.LSPOSED]
             ?: return@withContext Result.failure(IllegalStateException("cast sound needs the Vector channel"))
-        val extras = android.os.Bundle().apply {
-            putParcelable(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_PIPE, pipe)
-            putBinder(io.github.ynkcc.moredisplay.daemon.ProviderRpc.EXTRA_PIPE_TOKEN, token)
-        }
         val response = runCatching {
-            slot.transport.sendWithExtras(RpcRequest.StartAudioCapture(nextId(), displayId), extras)
+            slot.transport.sendWithExtras(
+                RpcRequest.StartAudioCapture(nextId(), displayId),
+                RpcExtras(token = token, pipe = pipe).toBundle()
+            )
         }.getOrElse { RpcResponse.Error(0, -1, "rpc failed: ${it.message}") }
         (response as? RpcResponse.IdList)?.let { Result.success(it.ids) }
             ?: Result.failure(IllegalStateException(response.message()))
     }
 
-    /** Cast sound off: the apps get their speaker back. */
-    suspend fun stopAudioCapture(displayId: Int): Result<Unit> {
-        val response = callSystemServer { RpcRequest.StopAudioCapture(nextId(), displayId) }
-        return if (response is RpcResponse.Ok) Result.success(Unit)
-        else Result.failure(IllegalStateException(response.message()))
+    /**
+     * Cast sound off, without waiting: the apps get their speaker back. Tied to [token], so a late stop can't end
+     * a newer cast's sound.
+     */
+    fun stopAudioCaptureLater(displayId: Int, token: android.os.IBinder) {
+        scope.launch {
+            val slot = slots[Privilege.LSPOSED] ?: return@launch
+            val response = runCatching {
+                slot.transport.sendWithExtras(
+                    RpcRequest.StopAudioCapture(nextId(), displayId),
+                    RpcExtras(token = token).toBundle()
+                )
+            }.getOrElse { RpcResponse.Error(0, -1, "rpc failed: ${it.message}") }
+            if (response is RpcResponse.Error) Log.w(TAG, "stop cast sound of display $displayId: ${response.message()}")
+        }
     }
 
     // ---- Policy operations: only effective inside the system_server daemon (Xposed slot) ----

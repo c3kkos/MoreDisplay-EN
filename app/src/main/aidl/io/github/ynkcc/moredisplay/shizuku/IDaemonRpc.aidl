@@ -14,8 +14,9 @@ interface IDaemonRpc {
     void destroy();
 
     /**
-     * Eye on: like invoke() with an AttachViewer request, plus the viewer's Surface and binder token
-     * (packed in a Bundle, see ProviderRpc.EXTRA_VIEWER_*). Returns a serialized RpcResponse.
+     * Like invoke(), plus objects that can't be serialized into the request bytes (a Surface, a binder token,
+     * a pipe end), packed in a Bundle by RpcExtras. Used by the eye, cast sound and touch control.
+     * Returns a serialized RpcResponse. (Same transaction code as the former attachViewer.)
      */
-    byte[] attachViewer(in byte[] payload, in Bundle viewer);
+    byte[] sendWithExtras(in byte[] payload, in Bundle extras);
 }

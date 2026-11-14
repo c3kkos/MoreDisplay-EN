@@ -84,6 +84,9 @@ class ShellDisplayEngine(
         }
     }
 
+    // AttributionSource is Android 12+; this is only reached through Context#getAttributionSource, which the
+    // framework calls on Android 12+ only.
+    @android.annotation.SuppressLint("NewApi")
     private fun attributionSourceFor(packageName: String): android.content.AttributionSource {
         val cls = android.content.AttributionSource::class.java
         val ctor = cls.declaredConstructors.firstOrNull {
@@ -122,7 +125,7 @@ class ShellDisplayEngine(
     override fun attachViewer(displayId: Int, surface: Surface, token: android.os.IBinder) =
         viewers.attach(displayId, surface, token)
 
-    override fun detachViewer(displayId: Int): Boolean = viewers.detach(displayId)
+    override fun detachViewer(displayId: Int, token: android.os.IBinder?): Boolean = viewers.detach(displayId, token)
 
     private val touch = TouchChannels(TAG) { id -> virtualDisplays.containsKey(id) }
 

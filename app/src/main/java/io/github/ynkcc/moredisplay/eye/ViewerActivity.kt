@@ -11,14 +11,9 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.util.Rational
-import android.os.ParcelFileDescriptor
 import android.view.Gravity
 import android.view.MotionEvent
 import androidx.activity.OnBackPressedCallback
-import java.io.BufferedOutputStream
-import java.io.DataOutputStream
-import java.io.FileOutputStream
-import java.util.concurrent.Executors
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
@@ -29,25 +24,23 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import io.github.ynkcc.moredisplay.App
-import io.github.ynkcc.moredisplay.core.TouchCodec
-import io.github.ynkcc.moredisplay.core.TouchEvent
 import io.github.ynkcc.moredisplay.cast.CastController
-import io.github.ynkcc.moredisplay.cast.FrameHub
 import io.github.ynkcc.moredisplay.core.ConnectionStatus
 import io.github.ynkcc.moredisplay.core.DisplayInfo
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * The eye's viewer: shows a managed virtual display live in a real picture-in-picture window.
+ * The eye's viewer: shows a managed virtual display live in a real picture-in-picture window, and lets you control
+ * it by touch when expanded to full screen.
  *
  * - The viewer's surface asks for frames at the display's **full size** (`setFixedSize`); the compositor scales
  *   them into the window. The display never adapts to the window.
- * - Attach when the surface exists, detach when it goes away (closing, PiP dismissed, screen off), so the
- *   display always has an output. The binder [token] lets the daemon detach on its own if this process dies.
- * - PiP can be expanded to full screen and shrunk back at will; in full screen two buttons offer
- *   "Picture-in-picture" and "Close".
+ * - Where the picture comes from is [EyeSource] (daemon, or the cast's frame hub while casting); touch control is
+ *   [EyeTouch]. This class wires them to the window, PiP and the activity lifecycle.
+ * - Attach when the surface exists, detach when it goes away (closing, PiP dismissed, screen off). The binder
+ *   [token] lets the daemon detach on its own if this process dies.
+ * - In full screen: "Back" (for the app on the display), "Picture-in-picture" and "Close". The tablet's own Back
+ *   shrinks the viewer to PiP.
  */
 class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
 
@@ -66,26 +59,39 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
     private var displayWidth = 0
     private var displayHeight = 0
 
-    /** The display currently attached to this viewer's surface (or being attached). */
-    private var attachedTo: Int? = null
     private var surfaceReady = false
 
-    /** Set while the eye shows the display from the cast's frame hub instead of from the daemon. */
-    private var viaHub: FrameHub? = null
+    private val source = EyeSource(
+        scope = lifecycleScope,
+        token = token,
+        onShowing = { id ->
+            ViewerController.onShowing(this, id)
+            touch.open(id)
+        },
+        onFailed = { id, message ->
+            toast("Can't show display #$id: $message")
+            finish()
+        }
+    )
+
+    private val touch: EyeTouch by lazy {
+        EyeTouch(
+            scope = lifecycleScope,
+            token = token,
+            taskId = { taskId },
+            onAvailable = { on ->
+                backButton.visibility = if (on) View.VISIBLE else View.GONE
+                if (!on) dots.clear()
+            },
+            onUnavailable = { message -> toast("Touch control unavailable: $message") }
+        )
+    }
 
     private lateinit var frame: AspectFrameLayout
     private lateinit var surfaceView: SurfaceView
     private lateinit var controls: LinearLayout
     private lateinit var backButton: Button
     private lateinit var dots: TouchDotsView
-
-    // ---- Touch control (full-screen viewer only; a PiP window can't receive touches) ----
-    private val touchWriter = Executors.newSingleThreadExecutor { r -> Thread(r, "MoreDisplay-touch-out") }
-
-    /** The touch pipe's write end and stream, while a touch channel is open. */
-    private var touchPipe: ParcelFileDescriptor? = null
-    private var touchOut: DataOutputStream? = null
-    private var touchFor: Int? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -100,7 +106,7 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
             text = "Back"
             contentDescription = "Back, in the app on the virtual display"
             visibility = View.GONE
-            setOnClickListener { sendTouch(TouchEvent.Back) }
+            setOnClickListener { touch.back() }
         }
         controls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -139,7 +145,9 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
         open(intent)
         // Casting starts or stops: switch between the daemon and the cast's frame hub as the source.
         lifecycleScope.launch {
-            CastController.activeHub.collect { reroute() }
+            CastController.activeHub.collect {
+                source.reroute(surfaceView.holder.surface?.takeIf { surfaceReady && it.isValid })
+            }
         }
     }
 
@@ -153,17 +161,17 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
     private fun open(intent: Intent) {
         val id = intent.getIntExtra(EXTRA_DISPLAY_ID, -1)
         if (id < 0) {
-            if (attachedTo == null) finish()
+            if (source.attachedTo == null) finish()
             return
         }
         lifecycleScope.launch {
             val info = findDisplay(id)
             if (info == null) {
                 toast("Display #$id is not managed by MoreDisplay")
-                if (attachedTo == null) finish()
+                if (source.attachedTo == null) finish()
                 return@launch
             }
-            if (attachedTo != null && attachedTo != id) detachNow()
+            if (source.attachedTo != null && source.attachedTo != id) detachNow()
             displayId = id
             displayWidth = info.spec.width
             displayHeight = info.spec.height
@@ -191,79 +199,17 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         surfaceReady = false
-        detachNow() // must finish before the surface goes away
+        detachNow()
     }
 
     private fun attach() {
-        val id = displayId
-        if (attachedTo == id) return
-        val surface = surfaceView.holder.surface
-        if (surface == null || !surface.isValid) return
-        attachedTo = id
-        // While the display is being cast, its frames already come to this app: show them from the cast's hub.
-        CastController.hubFor(id)?.let { hub ->
-            runCatching { hub.setOutput("eye", surface) }
-                .onSuccess {
-                    viaHub = hub
-                    Log.i(TAG, "showing display #$id (from the cast)")
-                    ViewerController.onShowing(this, id)
-                    openTouch(id)
-                }
-                .onFailure {
-                    attachedTo = null
-                    toast("Can't show display #$id: ${it.message}")
-                    finish()
-                }
-            return
-        }
-        lifecycleScope.launch {
-            App.displays().attachViewer(id, surface, token)
-                .onSuccess {
-                    if (attachedTo != id) {
-                        // The surface went away while attaching: give the display its sink back.
-                        App.displays().detachViewer(id)
-                        return@onSuccess
-                    }
-                    Log.i(TAG, "showing display #$id")
-                    ViewerController.onShowing(this@ViewerActivity, id)
-                    openTouch(id)
-                }
-                .onFailure {
-                    Log.e(TAG, "attach to display #$id failed", it)
-                    if (attachedTo == id) attachedTo = null
-                    toast("Can't show display #$id: ${it.message}")
-                    finish()
-                }
-        }
-    }
-
-    private fun reroute() {
-        val id = attachedTo ?: return
-        val hub = CastController.hubFor(id)
-        if (hub === viaHub) return
-        if (viaHub != null) {
-            // The cast stopped: its hub (and our output on it) is gone. Attach to the daemon again.
-            viaHub = null
-        }
-        // The cast started: its hub replaced this viewer in the daemon, so there's nothing to detach there.
-        attachedTo = null
-        if (surfaceReady) attach()
+        val surface = surfaceView.holder.surface ?: return
+        if (displayId >= 0) source.attach(displayId, surface)
     }
 
     private fun detachNow() {
-        closeTouch()
-        val id = attachedTo ?: return
-        attachedTo = null
-        viaHub?.let { hub ->
-            viaHub = null
-            runCatching { hub.setOutput("eye", null) }
-            Log.i(TAG, "stopped showing display #$id (from the cast)")
-            return
-        }
-        runBlocking {
-            withTimeoutOrNull(1_500) { App.displays().detachViewer(id) }
-        }
-        Log.i(TAG, "stopped showing display #$id")
+        touch.close()
+        source.detach()
     }
 
     // ---- Picture-in-picture ----
@@ -308,71 +254,13 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
         if (isInPictureInPictureMode) dots.clear()
     }
 
-    // ---- Touch control ----
-
-    /** Opens the touch channel to [displayId]'s daemon (if touch control is on). */
-    private fun openTouch(displayId: Int) {
-        if (touchFor == displayId) return
-        closeTouch()
-        if (!EyeSettings.touchOptions().enabled) return
-        touchFor = displayId
-        lifecycleScope.launch {
-            val pipe = ParcelFileDescriptor.createPipe() // [0] read end -> daemon, [1] write end stays here
-            App.displays().openTouchChannel(displayId, pipe[0], token, taskId)
-                .onSuccess {
-                    runCatching { pipe[0].close() }
-                    if (touchFor != displayId) {
-                        runCatching { pipe[1].close() }
-                        return@onSuccess
-                    }
-                    touchPipe = pipe[1]
-                    touchOut = DataOutputStream(BufferedOutputStream(FileOutputStream(pipe[1].fileDescriptor), 512))
-                    backButton.visibility = View.VISIBLE
-                    Log.i(TAG, "touch control on for display #$displayId")
-                }
-                .onFailure {
-                    runCatching { pipe[0].close() }
-                    runCatching { pipe[1].close() }
-                    if (touchFor == displayId) touchFor = null
-                    Log.w(TAG, "no touch control for display #$displayId: ${it.message}")
-                    toast("Touch control unavailable: ${it.message}")
-                }
-        }
-    }
-
-    private fun closeTouch() {
-        touchFor = null
-        backButton.visibility = View.GONE
-        dots.clear()
-        val out = touchOut
-        val pipe = touchPipe
-        touchOut = null
-        touchPipe = null
-        if (out != null || pipe != null) {
-            touchWriter.execute {
-                runCatching { out?.close() }
-                runCatching { pipe?.close() }
-            }
-        }
-    }
+    // ---- Touch control (full screen only: a PiP window can't receive touches) ----
 
     private fun onPictureTouch(view: View, event: MotionEvent): Boolean {
-        if (isInPictureInPictureMode || touchOut == null || displayWidth <= 0) return false
-        val pointers = (0 until event.pointerCount).map { i ->
-            val (x, y) = TouchCodec.map(event.getX(i), event.getY(i), view.width, view.height, displayWidth, displayHeight)
-            TouchEvent.Pointer(event.getPointerId(i), x, y, event.getPressure(i).coerceIn(0f, 1f))
-        }
-        sendTouch(TouchEvent.Motion(event.action, event.downTime, event.eventTime, pointers))
+        if (isInPictureInPictureMode || !touch.isOpen || displayWidth <= 0) return false
+        touch.motion(event, view.width, view.height, displayWidth, displayHeight)
         if (EyeSettings.touchOptions().showTouches) dots.show(event) else dots.clear()
         return true
-    }
-
-    private fun sendTouch(event: TouchEvent) {
-        val out = touchOut ?: return
-        touchWriter.execute {
-            runCatching { TouchCodec.write(out, event) }
-                .onFailure { Log.w(TAG, "touch event lost: ${it.message}") }
-        }
     }
 
     override fun onStop() {
@@ -383,7 +271,7 @@ class ViewerActivity : ComponentActivity(), SurfaceHolder.Callback {
 
     override fun onDestroy() {
         detachNow()
-        touchWriter.shutdown()
+        touch.release()
         ViewerController.onClosed(this)
         super.onDestroy()
     }

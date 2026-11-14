@@ -2,7 +2,6 @@ package io.github.ynkcc.moredisplay.daemon
 
 import android.content.Context
 import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioRecord
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
@@ -26,7 +25,6 @@ class AudioRouter(private val context: Context) {
     companion object {
         private const val TAG = "MoreDisplay_Audio"
         const val SAMPLE_RATE = 48_000
-        private const val PKG = "android.media.audiopolicy"
     }
 
     private class Session(
@@ -47,45 +45,14 @@ class AudioRouter(private val context: Context) {
             "no app is set to \"Open on\" display $displayId, so there is no sound to cast"
         }
         stop(displayId)
-        val audio = context.getSystemService(AudioManager::class.java)
-            ?: throw IllegalStateException("no AudioManager")
-
         val format = AudioFormat.Builder()
             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
             .setSampleRate(SAMPLE_RATE)
             .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
             .build()
-
-        val ruleClass = Class.forName("$PKG.AudioMixingRule")
-        val ruleBuilder = Class.forName("$PKG.AudioMixingRule\$Builder").getConstructor().newInstance()
-        val matchUid = ruleClass.getField("RULE_MATCH_UID").getInt(null)
-        val addMixRule = ruleBuilder.javaClass.getMethod("addMixRule", Int::class.javaPrimitiveType, Any::class.java)
-        uids.forEach { addMixRule.invoke(ruleBuilder, matchUid, it) }
-        val rule = ruleBuilder.javaClass.getMethod("build").invoke(ruleBuilder)
-
-        val mixClass = Class.forName("$PKG.AudioMix")
-        val loopBack = mixClass.getField("ROUTE_FLAG_LOOP_BACK").getInt(null)
-        val mixBuilder = Class.forName("$PKG.AudioMix\$Builder").getConstructor(ruleClass).newInstance(rule)
-        mixBuilder.javaClass.getMethod("setFormat", AudioFormat::class.java).invoke(mixBuilder, format)
-        mixBuilder.javaClass.getMethod("setRouteFlags", Int::class.javaPrimitiveType).invoke(mixBuilder, loopBack)
-        val mix = mixBuilder.javaClass.getMethod("build").invoke(mixBuilder)
-
-        val policyBuilderClass = Class.forName("$PKG.AudioPolicy\$Builder")
-        val policyBuilder = policyBuilderClass.getConstructor(Context::class.java).newInstance(context)
-        policyBuilderClass.getMethod("addMix", mixClass).invoke(policyBuilder, mix)
-        val policy = policyBuilderClass.getMethod("build").invoke(policyBuilder)!!
-
-        val policyClass = Class.forName("$PKG.AudioPolicy")
-        val result = AudioManager::class.java.getMethod("registerAudioPolicy", policyClass).invoke(audio, policy) as Int
-        check(result == 0) { "registerAudioPolicy failed ($result)" }
-
-        val record = try {
-            (policyClass.getMethod("createAudioRecordSink", mixClass).invoke(policy, mix) as AudioRecord)
-                .also { it.startRecording() }
-        } catch (e: Throwable) {
-            unregister(audio, policy)
-            throw e
-        }
+        val capture = HiddenApi.captureUidsLoopback(context, uids, format)
+        val policy = capture.policy
+        val record = capture.record
 
         val death = IBinder.DeathRecipient {
             Log.w(TAG, "cast app died; giving display $displayId's sound back to the speaker")
@@ -93,7 +60,7 @@ class AudioRouter(private val context: Context) {
         }
         runCatching { token.linkToDeath(death, 0) }.onFailure {
             record.release()
-            unregister(audio, policy)
+            HiddenApi.unregisterAudioPolicy(context, policy)
             throw it
         }
 
@@ -104,22 +71,25 @@ class AudioRouter(private val context: Context) {
         return uids.toList()
     }
 
-    /** Puts the sound of [displayId]'s apps back on the speaker. */
-    fun stop(displayId: Int): Boolean {
-        val session = synchronized(lock) { sessions.remove(displayId) } ?: return false
+    /** Puts the sound of [displayId]'s apps back on the speaker (only [token]'s session, if given). */
+    fun stop(displayId: Int, token: IBinder? = null): Boolean {
+        val session = synchronized(lock) {
+            val current = sessions[displayId] ?: return false
+            if (token != null && current.token !== token) return false
+            sessions.remove(displayId)
+        } ?: return false
         runCatching { session.token.unlinkToDeath(session.death, 0) }
         runCatching { session.record.stop() }
         session.pump.interrupt()
         runCatching { session.pipe.close() }
         runCatching { session.record.release() }
-        context.getSystemService(AudioManager::class.java)?.let { unregister(it, session.policy) }
+        HiddenApi.unregisterAudioPolicy(context, session.policy)
         Log.i(TAG, "display $displayId: sound back to the speaker")
         return true
     }
 
     private fun stopIfCurrent(displayId: Int, token: IBinder) {
-        val current = synchronized(lock) { sessions[displayId]?.token === token }
-        if (current) stop(displayId)
+        stop(displayId, token)
     }
 
     private fun pump(displayId: Int, record: AudioRecord, pipe: ParcelFileDescriptor, token: IBinder) {
@@ -134,13 +104,5 @@ class AudioRouter(private val context: Context) {
             }
         }.onFailure { Log.i(TAG, "display $displayId: audio pipe closed (${it.message})") }
         stopIfCurrent(displayId, token)
-    }
-
-    private fun unregister(audio: AudioManager, policy: Any) {
-        runCatching {
-            AudioManager::class.java.getMethod("unregisterAudioPolicy", policy.javaClass).invoke(audio, policy)
-        }.recoverCatching {
-            AudioManager::class.java.getMethod("unregisterAudioPolicyAsync", policy.javaClass).invoke(audio, policy)
-        }.onFailure { Log.e(TAG, "unregisterAudioPolicy failed", it) }
     }
 }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Eye widget background (eye on): a rounded square, black inside, with a rainbow frame
+     (vivid). Square on purpose: the widget shows it with fitCenter, so it stays a square at any size. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="@color/widget_rainbow_vivid"
+        android:pathData="M22,0 H78 A22,22 0 0 1 100,22 V78 A22,22 0 0 1 78,100 H22 A22,22 0 0 1 0,78 V22 A22,22 0 0 1 22,0 Z" />
+    <path
+        android:fillColor="#FF0E0E13"
+        android:pathData="M22,6 H78 A16,16 0 0 1 94,22 V78 A16,16 0 0 1 78,94 H22 A16,16 0 0 1 6,78 V22 A16,16 0 0 1 22,6 Z" />
+</vector>

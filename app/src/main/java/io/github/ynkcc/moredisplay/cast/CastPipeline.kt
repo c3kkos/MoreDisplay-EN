@@ -78,8 +78,6 @@ class CastPipeline(
     var soundNote: String? = null
         private set
 
-    /** The frame hub, for the eye to show the display while casting. */
-    val frameHub: FrameHub? get() = hub
 
     /**
      * Starts everything and waits for the first segments. Returns the URL for the Chromecast.
@@ -157,11 +155,11 @@ class CastPipeline(
         val repo = App.displays()
         if (hubAttached) {
             hubAttached = false
-            kotlinx.coroutines.runBlocking { withTimeoutOrNull(2_000) { repo.detachViewer(displayId) } }
+            repo.detachViewerLater(displayId, token) // tied to this cast's token: never hits a newer viewer
         }
         if (soundOn) {
             soundOn = false
-            kotlinx.coroutines.runBlocking { withTimeoutOrNull(2_000) { repo.stopAudioCapture(displayId) } }
+            repo.stopAudioCaptureLater(displayId, token)
         }
         server?.stop()
         audio?.stop()

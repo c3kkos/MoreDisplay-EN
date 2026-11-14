@@ -34,8 +34,8 @@ class ShizukuTransport(
     }
 
     override suspend fun sendWithExtras(request: RpcRequest, extras: android.os.Bundle): RpcResponse {
-        val responseBytes = runCatching { remote.attachViewer(RpcCodec.marshallRequest(request), extras) }
-            .getOrElse { throw IllegalStateException("shizuku attachViewer failed: ${it.message}", it) }
+        val responseBytes = runCatching { remote.sendWithExtras(RpcCodec.marshallRequest(request), extras) }
+            .getOrElse { throw IllegalStateException("shizuku sendWithExtras failed: ${it.message}", it) }
         return RpcCodec.unmarshallResponse(responseBytes)
     }
 
