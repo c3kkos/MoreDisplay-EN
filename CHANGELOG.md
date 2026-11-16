@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0-beta2-EN (versionCode 24, English edition, beta)
+
+### Fixed
+- **The adb commands work as documented again.** In beta1, `adb shell am start -n
+  io.github.c3kkos.moredisplay/.CommandActivity …` failed with *Activity class does not exist*: Android expands
+  the leading dot with the new package name, but the class keeps the original's Kotlin package. An alias with the
+  new name now points to it.
+
 ## 2.0.0-beta1-EN (versionCode 23, English edition, beta)
 
 ### Changed

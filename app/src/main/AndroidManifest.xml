@@ -111,6 +111,15 @@
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- `am start -n io.github.c3kkos.moredisplay/.CommandActivity` expands the dot with the package name,
+             but the class keeps the original's Kotlin package (io.github.ynkcc.moredisplay). This alias makes the
+             short, documented form work. -->
+        <activity-alias
+            android:name="io.github.c3kkos.moredisplay.CommandActivity"
+            android:targetActivity=".CommandActivity"
+            android:exported="true"
+            android:excludeFromRecents="true" />
+
         <receiver
             android:name=".BootReceiver"
             android:exported="true">
