@@ -168,6 +168,19 @@ object CastController {
             val current = sessions.currentCastSession
             if (current != null && current.isConnected && router.selectedRoute.id == device.id) {
                 next.session = current // already connected to this device
+            } else if (router.selectedRoute.id == device.id) {
+                // Still selected from an earlier cast, without a live session (seen after our process was killed
+                // mid-cast): selecting it again would do nothing and time out (CAST-06). Clear it, then select.
+                Log.i(TAG, "${device.name} is still selected without a live session " +
+                    "(${if (current == null) "none" else if (current.isConnecting) "connecting" else "not connected"}): reselecting")
+                runCatching { sessions.endCurrentSession(true) }
+                router.unselect(MediaRouter.UNSELECT_REASON_STOPPED)
+                main.postDelayed({
+                    if (attempt === next && next.session == null) {
+                        val fresh = router.routes.firstOrNull { it.id == device.id } ?: route
+                        router.selectRoute(fresh)
+                    }
+                }, 1_000)
             } else {
                 router.selectRoute(route) // the Cast library starts the session
             }
