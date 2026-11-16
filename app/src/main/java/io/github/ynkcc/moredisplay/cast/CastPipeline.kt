@@ -73,6 +73,8 @@ class CastPipeline(
             "encoded ${video?.encodedFrames ?: 0}, key frames ${video?.keyFrames ?: 0}, " +
             "segments ${segmenter?.made() ?: 0}, requests ${server?.requests ?: 0}, " +
             "sent ${server?.segmentsSent ?: 0} (last ${String.format(java.util.Locale.US, "%.1f", server?.lastSendMbps ?: 0f)} Mbit/s), " +
+            "TV fetching ${server?.lastFetchBehind ?: -1} behind the newest segment, " +
+            "playlist reloads ${server?.lastReloadGapMs ?: -1} ms apart, " +
             "sound fixes +${audio?.silenceMs ?: 0} ms silence / -${audio?.droppedMs ?: 0} ms dropped"
     private var soundOn = false
 

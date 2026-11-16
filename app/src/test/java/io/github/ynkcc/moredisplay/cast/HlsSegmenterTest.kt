@@ -36,6 +36,26 @@ class HlsSegmenterTest {
     }
 
     @Test
+    fun targetDuration_roundsToNearest_soHoldBackStaysInSpec() {
+        // Key frames a hair late: every segment is 2.033 s (61 frames), like on the device.
+        val seg = HlsSegmenter(hasAudio = false, targetUs = 2_000_000, keep = 12, window = 8, holdBackUs = 8_000_000)
+        var pts = 5_000_000L
+        for (s in 0 until 9) { // the 9th key frame closes the 8th segment
+            for (i in 0 until 61) {
+                seg.video(frame, pts, key = i == 0)
+                pts += 33_333L
+            }
+        }
+        val playlist = seg.playlist()!!
+        assertTrue(playlist, playlist.contains("#EXTINF:2.033,"))
+        assertTrue(playlist, playlist.contains("#EXT-X-TARGETDURATION:2\n"))
+        // RFC 8216: HOLD-BACK must be at least three target durations.
+        val target = Regex("#EXT-X-TARGETDURATION:(\\d+)").find(playlist)!!.groupValues[1].toInt()
+        assertTrue(8.0 >= 3 * target)
+        assertEquals(7L, seg.newest())
+    }
+
+    @Test
     fun holdBack_isAnnouncedInThePlaylist() {
         val seg = HlsSegmenter(hasAudio = false, targetUs = 2_000_000, keep = 12, window = 8, holdBackUs = 8_000_000)
         feed(seg, 12)

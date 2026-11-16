@@ -318,6 +318,29 @@ adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
 Common `flags` values (add them together): `1` PUBLIC, `64` SUPPORTS_TOUCH,
 `1024` TRUSTED (usually Vector only), `4096` ALWAYS_UNLOCKED (Vector only), `16384` OWN_FOCUS.
 
+### Settings and status from adb
+
+Every switch and choice on the Settings screen can be read and changed from a computer, and the cast's live
+counters can be read too. The answer is printed as `Result: Bundle[{result=…}]` (or `error=…`). Only the adb shell
+and root can use this; other apps on the tablet are refused.
+
+```bash
+# List the settings and their allowed values
+adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method help
+# Read all settings, or one
+adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method get
+adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method get --arg cast.sound
+# Change one or several at once (a bad value changes nothing)
+adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method set --arg cast.sound=off,cast.fps=30
+# Cast state, tablet counters and the TV's counters
+adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method status
+```
+
+Settings: `eye.card_button`, `eye.quick_tile`, `eye.widget`, `eye.adb`, `touch.enabled`, `touch.show_touches`
+(`on`/`off`); `cast.display` (display id); `cast.bitrate` (`auto`, `2`, `4`, `6`, `8`, `12`, `16`, `20` Mbit/s);
+`cast.playback` (`smooth`/`low_delay`); `cast.fps` (`30`/`60`); `cast.sound`, `cast.keep_awake` (`on`/`off`).
+Starting and stopping the cast and the eye stays with the `CommandActivity` actions above.
+
 ---
 
 ## Troubleshooting

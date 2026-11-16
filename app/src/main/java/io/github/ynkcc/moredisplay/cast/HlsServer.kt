@@ -42,6 +42,22 @@ class HlsServer(private val segmenter: HlsSegmenter, private val address: InetAd
     var lastSendMbps = 0f
         private set
 
+    /**
+     * How many finished segments were newer than the one the TV last fetched (diagnostics: the TV's real distance
+     * from the newest edge, measured on our side; 0 = it fetched the newest, so it plays at the edge). -1 = none yet.
+     */
+    @Volatile
+    var lastFetchBehind = -1L
+        private set
+
+    /** Time between the TV's last two playlist reloads in ms (diagnostics), -1 = fewer than two so far. */
+    @Volatile
+    var lastReloadGapMs = -1L
+        private set
+
+    @Volatile
+    private var lastPlaylistAtMs = -1L
+
     /** The playlist URL to give the Chromecast. */
     val playlistUrl: String = "http://${address.hostAddress}:${socket.localPort}/$token/live.m3u8"
 
@@ -86,10 +102,13 @@ class HlsServer(private val segmenter: HlsSegmenter, private val address: InetAd
                 name == "live.m3u8" -> {
                     body = segmenter.playlist()?.toByteArray()
                     type = "application/vnd.apple.mpegurl"
+                    if (method == "GET") notePlaylist()
                 }
                 name.startsWith("seg") && name.endsWith(".ts") -> {
-                    body = name.removePrefix("seg").removeSuffix(".ts").toLongOrNull()?.let { segmenter.segment(it) }
+                    val sequence = name.removePrefix("seg").removeSuffix(".ts").toLongOrNull()
+                    body = sequence?.let { segmenter.segment(it) }
                     type = "video/mp2t"
+                    if (method == "GET" && sequence != null) noteSegment(sequence, found = body != null)
                 }
                 else -> {
                     body = null
@@ -112,6 +131,22 @@ class HlsServer(private val segmenter: HlsSegmenter, private val address: InetAd
                 respond(out, 200, type, if (method == "HEAD") null else body, length = body.size)
             }
         }.onFailure { Log.d(TAG, "request failed: ${it.message}") }
+    }
+
+    // ---- Request log (tag MoreDisplay_Hls, info): what the TV fetches and when, measured on the tablet ----
+
+    private fun notePlaylist() {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val previous = lastPlaylistAtMs
+        lastPlaylistAtMs = now
+        if (previous >= 0) lastReloadGapMs = now - previous
+        Log.i(TAG, "playlist reload (newest seg${segmenter.newest()}, ${if (previous >= 0) "${now - previous} ms after the last" else "first"})")
+    }
+
+    private fun noteSegment(sequence: Long, found: Boolean) {
+        val behind = segmenter.newest() - sequence
+        if (found) lastFetchBehind = behind
+        Log.i(TAG, "fetch seg$sequence: ${if (found) "$behind newer segment(s) ready" else "not available (newest seg${segmenter.newest()})"}")
     }
 
     private fun respond(out: OutputStream, code: Int, type: String?, body: ByteArray?, length: Int = body?.size ?: 0) {

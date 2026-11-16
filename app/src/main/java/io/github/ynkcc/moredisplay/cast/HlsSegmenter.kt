@@ -69,7 +69,7 @@ class HlsSegmenter(
     fun playlist(): String? = synchronized(lock) {
         if (segments.isEmpty()) return@synchronized null
         val shown = segments.toList().takeLast(window)
-        val target = shown.maxOf { (it.durationUs + 999_999) / 1_000_000 }.coerceAtLeast(1)
+        val target = targetDuration(shown)
         buildString {
             append("#EXTM3U\n")
             append("#EXT-X-VERSION:3\n")
@@ -90,6 +90,18 @@ class HlsSegmenter(
     fun segment(sequence: Long): ByteArray? = synchronized(lock) {
         segments.firstOrNull { it.sequence == sequence }?.bytes
     }
+
+    /** Sequence number of the newest finished segment, or -1 before the first (diagnostics). */
+    fun newest(): Long = synchronized(lock) { segments.lastOrNull()?.sequence ?: -1 }
+
+    /**
+     * `EXT-X-TARGETDURATION`: the longest segment *rounded to the nearest second* (RFC 8216 4.3.3.1), not rounded
+     * up. Segments are cut at key frames, so a 2 s segment is often 2.033 s; rounding up made it 3. That matters:
+     * players reload a live playlist about once per target duration (an edge player then waits 3 s for each 2 s
+     * segment), and `HOLD-BACK` must be at least 3 target durations, so 8 s was out of spec with a target of 3.
+     */
+    private fun targetDuration(shown: List<Segment>): Long =
+        shown.maxOf { (it.durationUs + 500_000) / 1_000_000 }.coerceAtLeast(1)
 
     private fun close(endUs: Long) {
         val bytes = current?.toByteArray() ?: return

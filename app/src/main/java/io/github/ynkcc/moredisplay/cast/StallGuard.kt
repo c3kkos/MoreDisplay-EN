@@ -35,6 +35,10 @@ class StallGuard(
     var seeks = 0
         private set
 
+    /** Seeks asked for past the start of the reported seekable range (that range left too little room). */
+    var unclampedSeeks = 0
+        private set
+
     /**
      * The player's state changed (or was re-reported) at [nowMs], at [positionMs]. Returns the position to seek to,
      * or null. [rangeStartMs], if known, is the oldest position the player can seek to.
@@ -52,7 +56,14 @@ class StallGuard(
         while (stallTimes.isNotEmpty() && nowMs - stallTimes.first() > windowMs) stallTimes.removeFirst()
         if (stallTimes.size < stallsToAct || seeks >= maxSeeks || nowMs - lastSeekMs < cooldownMs) return null
         var target = positionMs - backMs
-        if (rangeStartMs != null) target = maxOf(target, rangeStartMs + 500)
+        // Stay inside the seekable range the player reports, unless that leaves less than half the step: on the
+        // SHIELD the reported range started ~1.2 s behind the position, so the clamped seek gained only 0.7 s and
+        // the pauses went on. Then ask for the full step anyway; a player that can't go there refuses or clamps
+        // the seek itself (CastController logs a refusal).
+        if (rangeStartMs != null) {
+            val clamped = maxOf(target, rangeStartMs + 500)
+            if (positionMs - clamped >= backMs / 2) target = clamped else unclampedSeeks++
+        }
         if (target >= positionMs) return null // nowhere to go back to
         seeks++
         lastSeekMs = nowMs

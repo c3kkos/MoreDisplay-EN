@@ -347,9 +347,13 @@ object CastController {
                     status.liveSeekableRange?.startTime)
                 if (guard.stalls != stallsBefore) Log.i(TAG, "${a.device} paused for data at ${position} ms (pause ${guard.stalls})")
                 if (target != null) {
-                    Log.i(TAG, "${a.device} keeps pausing at the newest edge: moving it back to $target ms (was $position)")
+                    val range = status.liveSeekableRange
+                    Log.i(TAG, "${a.device} keeps pausing at the newest edge: moving it back to $target ms (was $position; " +
+                        "seekable ${range?.startTime ?: "?"}–${range?.endTime ?: "?"} ms" +
+                        (if (guard.unclampedSeeks > 0) ", past the range start x${guard.unclampedSeeks}" else "") + ")")
                     client.seek(MediaSeekOptions.Builder().setPosition(target).build()).setResultCallback { r ->
                         if (!r.status.isSuccess) Log.w(TAG, "seek back refused (Cast status ${r.status.statusCode})")
+                        else Log.i(TAG, "seek back done: now at ${client.approximateStreamPosition} ms")
                     }
                 }
                 report(status)
