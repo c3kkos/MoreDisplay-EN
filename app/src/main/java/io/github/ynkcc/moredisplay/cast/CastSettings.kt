@@ -27,8 +27,17 @@ data class CastConfig(
     val playlistWindow: Int get() = 8
     val segmentsKept: Int get() = if (smooth) 12 else 16
 
-    /** Segments to have ready before telling the TV to play, so it can start [holdBackUs] back. */
-    val segmentsBeforePlay: Int get() = 5
+    /**
+     * Start-up burst (see HlsSegmenter): the newest segments left out of the playlist until the TV has reached its
+     * edge, then listed at once as reserve (6 s with Smooth, 3 s with Low delay).
+     */
+    val burstSegments: Int get() = 3
+
+    /**
+     * Segments to have ready before telling the TV to play: enough for players that honour [holdBackUs], plus the
+     * [burstSegments] held back.
+     */
+    val segmentsBeforePlay: Int get() = 6
 
     /** How far StallGuard moves a player back that keeps pausing at the newest edge. */
     val stallBackMs: Long get() = if (smooth) 6_000L else 3_000L

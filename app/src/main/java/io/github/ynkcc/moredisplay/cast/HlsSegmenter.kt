@@ -24,11 +24,21 @@ class HlsSegmenter(
     private val targetUs: Long = 1_000_000,
     private val keep: Int = 12,
     private val window: Int = 6,
-    private val holdBackUs: Long = 0
+    private val holdBackUs: Long = 0,
+    /**
+     * Start-up burst: the playlist leaves out the newest [burstSegments] finished segments until [release]. Some
+     * receivers (the Shield's Default Media Receiver) ignore `HOLD-BACK` and always play at the newest listed
+     * segment, so they start with almost no reserve and pause until pauses have built one up. Listing the held
+     * segments all at once, once the player has reached the (held-back) edge, hands it that reserve in one go.
+     */
+    burstSegments: Int = 0
 ) {
     class Segment(val sequence: Long, val durationUs: Long, val bytes: ByteArray)
 
     private val lock = Any()
+
+    /** Newest finished segments left out of the playlist (0 once released). */
+    private var held = burstSegments
     private val segments = ArrayDeque<Segment>()
     private var current: ByteArrayOutputStream? = null
     private var currentStartUs = 0L
@@ -67,8 +77,9 @@ class HlsSegmenter(
 
     /** The live playlist, or null before the first segment is finished. */
     fun playlist(): String? = synchronized(lock) {
-        if (segments.isEmpty()) return@synchronized null
-        val shown = segments.toList().takeLast(window)
+        val listed = segments.toList().dropLast(held)
+        if (listed.isEmpty()) return@synchronized null
+        val shown = listed.takeLast(window)
         val target = targetDuration(shown)
         buildString {
             append("#EXTM3U\n")
@@ -93,6 +104,25 @@ class HlsSegmenter(
 
     /** Sequence number of the newest finished segment, or -1 before the first (diagnostics). */
     fun newest(): Long = synchronized(lock) { segments.lastOrNull()?.sequence ?: -1 }
+
+    /** Sequence number of the newest segment in the playlist (below [newest] while the burst is held), or -1. */
+    fun newestListed(): Long = synchronized(lock) {
+        segments.toList().dropLast(held).lastOrNull()?.sequence ?: -1
+    }
+
+    /** True while the start-up burst is still held back. */
+    fun holding(): Boolean = synchronized(lock) { held > 0 }
+
+    /**
+     * Lists the held-back segments (see `burstSegments`). Returns how many segments that added and their length
+     * in µs, or null if nothing was held.
+     */
+    fun release(): Pair<Int, Long>? = synchronized(lock) {
+        if (held == 0) return@synchronized null
+        val added = segments.toList().takeLast(held)
+        held = 0
+        added.size to added.sumOf { it.durationUs }
+    }
 
     /**
      * `EXT-X-TARGETDURATION`: the longest segment *rounded to the nearest second* (RFC 8216 4.3.3.1), not rounded

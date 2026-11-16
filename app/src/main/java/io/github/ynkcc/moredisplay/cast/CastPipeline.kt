@@ -133,7 +133,8 @@ class CastPipeline(
                 targetUs = config.segmentUs,
                 keep = config.segmentsKept,
                 window = config.playlistWindow,
-                holdBackUs = config.holdBackUs
+                holdBackUs = config.holdBackUs,
+                burstSegments = config.burstSegments
             ).also { this.segmenter = it }
             val bitrate = config.bitrateFor(width, height)
             val encoder = try {

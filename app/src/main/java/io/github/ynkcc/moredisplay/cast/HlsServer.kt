@@ -18,6 +18,8 @@ class HlsServer(private val segmenter: HlsSegmenter, private val address: InetAd
 
     companion object {
         private const val TAG = "MoreDisplay_Hls"
+        private const val BURST_FALLBACK_MS = 30_000L
+        private const val BURST_SETTLE_MS = 4_000L
     }
 
     private val token = UUID.randomUUID().toString().replace("-", "")
@@ -57,6 +59,9 @@ class HlsServer(private val segmenter: HlsSegmenter, private val address: InetAd
 
     @Volatile
     private var lastPlaylistAtMs = -1L
+
+    @Volatile
+    private var firstPlaylistAtMs = -1L
 
     /** The playlist URL to give the Chromecast. */
     val playlistUrl: String = "http://${address.hostAddress}:${socket.localPort}/$token/live.m3u8"
@@ -140,13 +145,29 @@ class HlsServer(private val segmenter: HlsSegmenter, private val address: InetAd
         val previous = lastPlaylistAtMs
         lastPlaylistAtMs = now
         if (previous >= 0) lastReloadGapMs = now - previous
-        Log.i(TAG, "playlist reload (newest seg${segmenter.newest()}, ${if (previous >= 0) "${now - previous} ms after the last" else "first"})")
+        if (firstPlaylistAtMs < 0) firstPlaylistAtMs = now
+        Log.i(TAG, "playlist reload (newest seg${segmenter.newest()}, listed up to seg${segmenter.newestListed()}, " +
+            "${if (previous >= 0) "${now - previous} ms after the last" else "first"})")
+        // Fallback: never hold the burst back for long, whatever the TV does.
+        if (segmenter.holding() && now - firstPlaylistAtMs > BURST_FALLBACK_MS) releaseBurst("fallback after ${BURST_FALLBACK_MS / 1_000} s")
     }
 
     private fun noteSegment(sequence: Long, found: Boolean) {
         val behind = segmenter.newest() - sequence
         if (found) lastFetchBehind = behind
         Log.i(TAG, "fetch seg$sequence: ${if (found) "$behind newer segment(s) ready" else "not available (newest seg${segmenter.newest()})"}")
+        // The TV fetched the newest listed segment: it's at the edge of the held-back playlist. List the held
+        // segments now, so it gets their length as reserve in one go instead of building it up through pauses.
+        // Not in the first seconds: the TV must have picked its start position (and started playing) first.
+        val sinceFirst = android.os.SystemClock.elapsedRealtime() - firstPlaylistAtMs
+        if (found && segmenter.holding() && firstPlaylistAtMs >= 0 && sinceFirst >= BURST_SETTLE_MS &&
+            sequence >= segmenter.newestListed()
+        ) releaseBurst("TV reached seg$sequence after ${sinceFirst} ms")
+    }
+
+    private fun releaseBurst(why: String) {
+        val (count, us) = segmenter.release() ?: return
+        Log.i(TAG, "start-up burst: $why; listing $count held segment(s), ${"%.1f".format(java.util.Locale.US, us / 1e6)} s of reserve")
     }
 
     private fun respond(out: OutputStream, code: Int, type: String?, body: ByteArray?, length: Int = body?.size ?: 0) {
