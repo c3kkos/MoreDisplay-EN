@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.8.3-beta2-EN (versionCode 17, English edition, beta)
+
+Second beta for the cast pauses, after testing beta1 on an NVIDIA Shield: every cast start paused 1–15 times,
+always exactly 3 s apart, with sound on or off.
+
+### Fixed
+- **Playlist target duration rounded to the nearest second, as the HLS spec says, instead of up.** Segments are
+  cut at key frames and are often 2.033 s long, so the playlist said `TARGETDURATION:3` for 2 s segments. Players
+  reload a live playlist about once per target duration, so a player near the newest edge waited 3 s for every
+  2 s segment (the 3 s pauses). It also made the 8 s `HOLD-BACK` invalid (it must be at least 3 target
+  durations), which may be why the Shield ignored it.
+- **Moving a pausing TV back works when its reported seekable range is tiny.** The Shield reported a range that
+  started only about 1.2 s behind its position, so the 6 s move back was cut to 0.7 s and the pauses went on.
+  Now the full step is asked for when the range would leave less than half of it.
+
+### Added
+- **Request log** (`adb logcat -s MoreDisplay_Hls`): every playlist reload with the time since the last one, and
+  every segment fetch with how many newer segments were already finished, which is the TV's real distance from the
+  newest edge, measured on the tablet. The 10 s stats line (`MoreDisplay_Cast`) shows the latest values too.
+- The log line for a move back shows the TV's seekable range and where the TV ended up.
+
 ## 1.8.3-beta1-EN (versionCode 16, English edition, beta)
 
 Beta for testing the cast fixes below; published as a pre-release, not as the latest version.

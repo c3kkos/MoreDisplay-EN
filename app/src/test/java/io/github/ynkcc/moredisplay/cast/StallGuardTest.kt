@@ -67,5 +67,16 @@ class StallGuardTest {
         g.onState(PLAYING, 0, 20_000)
         g.onState(BUFFERING, 2_000, 22_000); g.onState(PLAYING, 2_100, 22_000)
         assertEquals(19_500L, g.onState(BUFFERING, 4_000, 24_000, rangeStartMs = 19_000))
+        assertEquals(0, g.unclampedSeeks)
+    }
+
+    @Test
+    fun tinySeekableRange_asksForTheFullStep() {
+        // Seen on the SHIELD: range start 6768 ms at position 7985 ms; clamping would gain only 0.7 s.
+        val g = StallGuard(backMs = 6_000)
+        g.onState(PLAYING, 0, 2_000)
+        g.onState(BUFFERING, 5_000, 4_979); g.onState(PLAYING, 5_100, 4_979)
+        assertEquals(1_985L, g.onState(BUFFERING, 8_000, 7_985, rangeStartMs = 6_768))
+        assertEquals(1, g.unclampedSeeks)
     }
 }
