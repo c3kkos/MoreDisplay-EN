@@ -10,11 +10,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.github.ynkcc.moredisplay"
+        // The fork's own package since 2.0.0 (see core/AppIdentity.kt); the namespace stays the original's.
+        applicationId = "io.github.c3kkos.moredisplay"
         minSdk = 29
         targetSdk = 37
-        versionCode = 22
-        versionName = "1.9.0-EN"
+        versionCode = 23
+        versionName = "2.0.0-beta1-EN"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

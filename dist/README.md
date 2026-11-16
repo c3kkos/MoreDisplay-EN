@@ -37,22 +37,22 @@ Enable the module in the Vector manager with the System Framework (`system`) sco
 
 ```sh
 # create a managed display (flags=1 -> PUBLIC)
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity \
   --es action create --ei width 1280 --ei height 720 --ei dpi 240 --ei flags 1
 
 # list / remove
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action list
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action remove --ei display_id 2
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity --es action list
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity --es action remove --ei display_id 2
 
 # hide display 2 from uid 10123
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity \
   --es action policy-set --ei uid 10123 --es mode hide --eia display_ids 2
 
 # send that app's recordings / gestures to display 2
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity \
   --es action policy-set --ei uid 10123 --es mode all --ei record_display_id 2
 
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action policy-list
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity --es action policy-list
 ```
 
 ## Notes and limitations

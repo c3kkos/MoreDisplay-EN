@@ -115,7 +115,7 @@ fun SettingsScreen() {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("adb usage", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity " +
+                    "adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity " +
                         "--es action eye --ei display_id 2 --es state toggle",
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace

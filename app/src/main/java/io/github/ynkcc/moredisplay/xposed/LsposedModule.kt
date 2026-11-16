@@ -32,7 +32,7 @@ class LsposedModule : XposedModule() {
 
     companion object {
         private const val TAG = "MoreDisplay_Lsposed"
-        private const val MODULE_PACKAGE = "io.github.ynkcc.moredisplay"
+        private const val MODULE_PACKAGE = io.github.ynkcc.moredisplay.core.AppIdentity.PACKAGE
         private const val TRANSPORT_CLASS = "android.content.ContentProvider\$Transport"
 
         /** Executable -> indexes of its `String` parameters, to avoid repeated reflection on hot provider calls. */
@@ -253,7 +253,7 @@ object SystemDaemon {
         MORE_DISPLAY_PACKAGE in packages
     }.getOrDefault(false)
 
-    private const val MORE_DISPLAY_PACKAGE = "io.github.ynkcc.moredisplay"
+    private const val MORE_DISPLAY_PACKAGE = io.github.ynkcc.moredisplay.core.AppIdentity.PACKAGE
 
     private fun createEngine(): DisplayEngine? {
         engineRef?.let { return it }
