@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.0.0-EN (versionCode 25, English edition)
+
+The English edition becomes its own app. Same features as 1.9.0.
+
+### Changed
+- **New package name: `io.github.c3kkos.moredisplay`** (was `io.github.ynkcc.moredisplay`, the original's). It can
+  be installed next to ynkcc's MoreDisplay and is no longer mistaken for it. **Enable only one of them in Vector**:
+  both hook the same parts of Android.
+- **Not an update from 1.x:** Android sees a new app. Install 2.0.0, uninstall 1.x (or disable it in Vector),
+  enable 2.0.0 in Vector with the System Framework scope, and reboot. Displays, rules and settings don't move
+  over: set them up again, cast once from the app to pick the Chromecast, and add the eye tile and widget again.
+- adb commands use the new name: `adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity …` and
+  `adb shell content call --uri content://io.github.c3kkos.moredisplay.adb …`.
+- The code keeps the original's Kotlin package (`io.github.ynkcc.moredisplay`); only the installed app's name
+  changes. The developer test app (MoreDisplayProbe) keeps its old name.
+
+Tested on the owner's Android 12L tablet: switch-over in Vector, the Home tab connection, displays and rules,
+the adb commands and adb control, and casting to an NVIDIA Shield with and without sound.
+
 ## 2.0.0-beta2-EN (versionCode 24, English edition, beta)
 
 ### Fixed
