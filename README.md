@@ -211,11 +211,20 @@ How it works: the screen's picture goes to the tablet's hardware video encoder (
 Chromecast plays it as a live stream from a small server in MoreDisplay, using Google's built-in
 player (no account or registration needed). The eye keeps working while casting.
 
-- **Delay**: about 10 seconds with **Playback: Smooth** (the default: stability first, the TV keeps plenty
-  of video in reserve), about 5 seconds with **Low delay**. Picture and sound are delayed together, so they
-  stay in sync. It takes about 10 seconds before the picture first appears.
+- **Delay**: up to about 10 seconds with **Playback: Smooth** (the default: stability first, the TV keeps
+  several seconds of video in reserve), about 5 seconds with **Low delay**. Picture and sound are delayed
+  together, so they stay in sync. It takes about 15 seconds before the picture first appears: MoreDisplay
+  prepares 12 seconds of video first, and hands the TV an extra 6 seconds of reserve once it starts playing
+  (some players, the NVIDIA Shield's among them, otherwise play at the very newest second and pause).
 - **Live counters** on the cast card show what the TV's player is doing (and how often it paused), the
   tablet's frame rates and the Wi-Fi speed, so a problem can be traced to the TV, the Wi-Fi or the tablet.
+  The *behind the newest* figure is what the TV reports, and it isn't reliable on every TV (on a Shield it
+  reads low); `adb logcat -s MoreDisplay_Hls` shows the real distance, measured on the tablet.
+- **Tested with**: an Android 12L tablet casting to an NVIDIA Shield, over Wi-Fi: no pauses after the start.
+  Other Chromecasts and TVs with Chromecast built in should work, but their players differ; if yours pauses,
+  please report it with the cast card's counters.
+- The stream is plain HTTP on your home network, reachable only through a random, per-cast address. Fine at
+  home; don't cast on a network you don't trust.
 - **Sound** (Vector only): the sound of the apps set to *Open on* the cast screen goes to the TV
   instead of the tablet speaker, until the cast stops. Apps that forbid sound capture stay silent.
   With Shizuku, casting is picture-only.
@@ -356,7 +365,7 @@ Starting and stopping the cast and the eye stays with the `CommandActivity` acti
 | Cast: *Connect the tablet to the same Wi-Fi* | The tablet and the Chromecast must be on the same Wi-Fi network. |
 | Cast: the TV shows an error or stays loading | Check that the tablet and the Chromecast are on the same network and that no VPN or "client isolation" (common on guest Wi-Fi) blocks them from talking to each other. |
 | Cast: no sound on the TV | Sound needs the Vector channel and an app set to *Open on* the cast screen. Some apps forbid sound capture. After updating MoreDisplay, reboot once (the sound needs the updated module in Android's system process). |
-| Cast: the picture stutters or pauses | Use **Playback: Smooth** in Settings → Cast. Then look at the cast card's counters: *encoder* well under the frame rate = the tablet can't keep up (try 30 fps or a lower quality); a low *last send* speed = weak Wi-Fi (bring the Chromecast closer to the router, 5 GHz helps); many *pauses* with normal numbers = please report them. |
+| Cast: the picture stutters or pauses | A single short stall in the very first second can happen; after that it should play without pauses. Use **Playback: Smooth** in Settings → Cast. Then look at the cast card's counters: *encoder* well under the frame rate = the tablet can't keep up (try 30 fps or a lower quality); a low *last send* speed = weak Wi-Fi (bring the Chromecast closer to the router, 5 GHz helps); many *pauses* with normal numbers = please report them. |
 | Cast error with a `CAST-xx` code | See *Cast error codes* below. |
 | The eye tile/widget says *No display* | Tap the eye on a display card once, so it knows which screen to show. |
 | The eye window is black | The app on that screen protects its content (DRM/secure), or nothing is drawn there yet. |
@@ -377,7 +386,7 @@ same line is in the log under the tag `MoreDisplay_Cast`, which also prints the 
 | `CAST-03` | The picture copier (OpenGL) failed | Report it with the details. |
 | `CAST-04` | The display's picture couldn't be taken | Make sure the display still exists and the channel (Vector/Shizuku) is connected. |
 | `CAST-05` | No video was produced | The details give the counters: `display frames 0` = the display sent nothing; `encoded 0` = the encoder produced nothing; few `key frames` = the encoder ignores key-frame requests. Report it with the details. |
-| `CAST-06` | Couldn't connect to the Cast device | Is the Chromecast on and on the same network? Try again; the details include Google's Cast status number. |
+| `CAST-06` | Couldn't connect to the Cast device | Is the Chromecast (and the TV) on and awake, on the same network? Try again; the details include Google's Cast status number. |
 | `CAST-07` | The Chromecast couldn't play the stream | Report it with the Cast status number in the details. |
 | `CAST-08` | The Chromecast never reached the tablet | The two can't talk to each other: same network? No VPN on the tablet? Guest Wi-Fi often isolates devices. |
 | `CAST-09` | The display to cast doesn't exist | Pick an existing display in Settings → Cast. |
