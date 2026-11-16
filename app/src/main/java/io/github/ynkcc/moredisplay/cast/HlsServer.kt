@@ -157,13 +157,15 @@ class HlsServer(private val segmenter: HlsSegmenter, private val address: InetAd
         val behind = segmenter.newest() - sequence
         if (found) lastFetchBehind = behind
         Log.i(TAG, "fetch seg$sequence: ${if (found) "$behind newer segment(s) ready" else "not available (newest seg${segmenter.newest()})"}")
-        // The TV fetched the newest listed segment: it's at the edge of the held-back playlist. List the held
-        // segments now, so it gets their length as reserve in one go instead of building it up through pauses.
-        // Not in the first seconds: the TV must have picked its start position (and started playing) first.
+        // List the held segments at the TV's first segment fetch after BURST_SETTLE_MS, so it gets their length
+        // as reserve in one go instead of building it up through pauses. Not in the first seconds: the TV must
+        // have picked its start position first. (Beta5 also waited for the TV to fetch the newest listed segment,
+        // but that edge moves on every 2 s while the burst is held, so the TV sometimes caught it only after
+        // 5.5 s and paused twice first.)
         val sinceFirst = android.os.SystemClock.elapsedRealtime() - firstPlaylistAtMs
-        if (found && segmenter.holding() && firstPlaylistAtMs >= 0 && sinceFirst >= BURST_SETTLE_MS &&
-            sequence >= segmenter.newestListed()
-        ) releaseBurst("TV reached seg$sequence after ${sinceFirst} ms")
+        if (found && segmenter.holding() && firstPlaylistAtMs >= 0 && sinceFirst >= BURST_SETTLE_MS) {
+            releaseBurst("TV fetched seg$sequence after ${sinceFirst} ms (newest listed seg${segmenter.newestListed()})")
+        }
     }
 
     private fun releaseBurst(why: String) {

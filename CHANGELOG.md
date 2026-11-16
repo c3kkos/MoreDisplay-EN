@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.8.3-beta6-EN (versionCode 20, English edition, beta)
+
+### Fixed
+- **The start-up burst comes on time.** Beta5 gave 0 pauses in 6 of 7 casts, but once the burst came only after
+  5.5 s and the TV paused twice before it: the burst waited for the TV to fetch the newest listed segment, and
+  that edge moves on every 2 s while the burst is held, so the TV kept just missing it. Now the burst is released
+  at the TV's first segment fetch from 2 s after its first request.
+
 ## 1.8.3-beta5-EN (versionCode 19, English edition, beta)
 
 (There is no real beta4: the `v1.8.3-beta4-en` pre-release was published by mistake from the beta3 code and is
@@ -19,7 +27,7 @@ after that it played without pauses (10-minute test).
 
 ### Fixed
 - **Start-up burst:** the playlist leaves out the 3 newest segments while the TV starts. Once the TV has reached
-  the edge of that shorter playlist (and at least 4 s after its first request; 2 s since beta5), the 3 segments are listed at once,
+  the edge of that shorter playlist (since beta6: at its first segment fetch after the wait) (and at least 4 s after its first request; 2 s since beta5), the 3 segments are listed at once,
   so the TV gets 6 s of reserve (3 s with Low delay) in one go instead of earning it through pauses. It's released
   after 30 s in any case. The log (`MoreDisplay_Hls`) says when and why it was released. The TV starts about 2 s
   later than before (6 segments ready instead of 5).
