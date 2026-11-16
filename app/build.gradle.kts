@@ -14,8 +14,8 @@ android {
         applicationId = "io.github.c3kkos.moredisplay"
         minSdk = 29
         targetSdk = 37
-        versionCode = 24
-        versionName = "2.0.0-beta2-EN"
+        versionCode = 25
+        versionName = "2.0.0-EN"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
