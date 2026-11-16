@@ -17,10 +17,10 @@ import io.github.ynkcc.moredisplay.eye.EyeSettings
  * Every setting from a computer, without touching the screen:
  *
  * ```
- * adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method help
- * adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method get [--arg cast.sound]
- * adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method set --arg cast.sound=off,cast.fps=30
- * adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method status
+ * adb shell content call --uri content://io.github.c3kkos.moredisplay.adb --method help
+ * adb shell content call --uri content://io.github.c3kkos.moredisplay.adb --method get [--arg cast.sound]
+ * adb shell content call --uri content://io.github.c3kkos.moredisplay.adb --method set --arg cast.sound=off,cast.fps=30
+ * adb shell content call --uri content://io.github.c3kkos.moredisplay.adb --method status
  * ```
  *
  * The answer is in the printed Bundle (`result=…`, or `error=…`). Only the adb shell (uid 2000) and root may call

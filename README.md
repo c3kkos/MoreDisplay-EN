@@ -58,8 +58,14 @@ That is the app (the Vector module itself). No GitHub account needed.
 
 (`MoreDisplayProbe-<version>.apk` is a small test app for developers. You can ignore it.)
 
-> **Coming from the original MoreDisplay?** This build is signed with a different key, so uninstall
-> the original app first, then install this one.
+> **Package name:** since 2.0.0 the English edition installs as its own app, **`io.github.c3kkos.moredisplay`**,
+> so it no longer clashes with the original MoreDisplay (`io.github.ynkcc.moredisplay`). **Enable only one of
+> them in Vector**: both hook the same parts of Android.
+>
+> **Coming from MoreDisplay EN 1.x?** 2.0.0 is a new app for Android, not an update: install it, then
+> uninstall 1.x (or at least disable it in Vector), enable 2.0.0 in Vector with the System Framework scope,
+> and reboot. Your displays, rules and settings don't move over; set them up again (the adb commands below
+> make that quick), cast once from the app to pick your Chromecast, and add the eye tile and widget again.
 
 <details>
 <summary>Want the newest development build instead?</summary>
@@ -275,38 +281,38 @@ phone and in `adb logcat -s MoreDisplay_Cmd`.
 
 ```sh
 # Create a 1280x720 virtual screen at 240 dpi (flags=1 means PUBLIC)
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity \
   --es action create --ei width 1280 --ei height 720 --ei dpi 240 --ei flags 1
 
 # List screens (the built-in screen comes first) / remove a virtual screen
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action list
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action remove --ei display_id 2
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity --es action list
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity --es action remove --ei display_id 2
 
 # Hide screen 2 from an app (by package name)
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity \
   --es action policy-set --es target_package com.example.app --es mode hide --eia display_ids 2
 
 # Always open an app on screen 2 (and let it see only screen 2)
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity \
   --es action policy-set --es target_package com.example.app --es mode only --eia display_ids 2 --ei launch_display_id 2
 
 # Make an app's screen recordings capture screen 2
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity \
   --es action policy-set --es target_package com.example.app --es mode all --ei record_display_id 2
 
 # The eye: show / hide / toggle screen 2 in the picture-in-picture viewer
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action eye --ei display_id 2 --es state on
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action eye --es state off
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity --es action eye --ei display_id 2 --es state on
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity --es action eye --es state off
 
 # Cast: start (display from Settings, last Chromecast used) / stop
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action cast --es state on
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action cast --es state off
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity --es action cast --es state on
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity --es action cast --es state off
 
 # Show all rules / delete a rule / check what an app can see
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity --es action policy-list
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity --es action policy-list
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity \
   --es action policy-remove --es target_package com.example.app
-adb shell am start -n io.github.ynkcc.moredisplay/.CommandActivity \
+adb shell am start -n io.github.c3kkos.moredisplay/.CommandActivity \
   --es action displays-for-uid --es target_package com.example.app
 ```
 
@@ -335,14 +341,14 @@ and root can use this; other apps on the tablet are refused.
 
 ```bash
 # List the settings and their allowed values
-adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method help
+adb shell content call --uri content://io.github.c3kkos.moredisplay.adb --method help
 # Read all settings, or one
-adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method get
-adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method get --arg cast.sound
+adb shell content call --uri content://io.github.c3kkos.moredisplay.adb --method get
+adb shell content call --uri content://io.github.c3kkos.moredisplay.adb --method get --arg cast.sound
 # Change one or several at once (a bad value changes nothing)
-adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method set --arg cast.sound=off,cast.fps=30
+adb shell content call --uri content://io.github.c3kkos.moredisplay.adb --method set --arg cast.sound=off,cast.fps=30
 # Cast state, tablet counters and the TV's counters
-adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method status
+adb shell content call --uri content://io.github.c3kkos.moredisplay.adb --method status
 ```
 
 Settings: `eye.card_button`, `eye.quick_tile`, `eye.widget`, `eye.adb`, `touch.enabled`, `touch.show_touches`
