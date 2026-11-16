@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.9.0-EN (versionCode 22, English edition)
+
+The cast release: smooth playback on the TV, and every setting from adb. It sums up the 1.8.3 betas below.
+Tested on an Android 12L tablet casting to an NVIDIA Shield; other Cast receivers haven't been tested.
+
+### Fixed
+- **The TV no longer pauses while casting.** In 1.8.2 it paused every 2–3 seconds. Some Cast players (the
+  Shield's among them) ignore the playlist's request to play a few seconds behind, and play at the newest
+  second, where every segment arrives just in time or too late. Now:
+  - the playlist's target duration follows the HLS spec (2 s for 2 s segments, not 3), so the TV reloads it as
+    often as segments arrive;
+  - **start-up burst:** the newest 6 seconds are held back while the TV starts, then handed to it at once, so it
+    has a reserve from the first seconds instead of building one up through pauses.
+
+  On the Shield (beta6 and beta7 tests): no pauses in 11 of 13 casts, and one short stall in the first 1–2
+  seconds in the other two; no pauses after that in any test.
+- **CAST-06 on the first cast after MoreDisplay was closed while casting** (app update, force-stop, or Android
+  ending it in the background).
+- **Sound track without holes:** the cast sound's timestamps stay continuous when the sound clock drifts.
+- A TV that keeps pausing is moved back the full step even when it reports a very short seekable range.
+
+### Added
+- **Every setting from adb:** `adb shell content call --uri content://io.github.ynkcc.moredisplay.adb --method
+  help|get|set|status` (see the README). Only the adb shell and root may use it.
+- **Live counters on the cast card:** the TV's player state and pauses, the tablet's frame rates, segments
+  made and sent with the Wi-Fi speed, and the sound corrections; also in the log (`MoreDisplay_Cast`) every 10 s.
+- **Stream request log** (`MoreDisplay_Hls`): every playlist reload and segment fetch, with the TV's real
+  distance from the newest segment.
+
+### Changed
+- The TV starts about 2 seconds later (about 15 s after you tap Cast), to prepare the start-up burst.
+
 ## 1.8.3-beta7-EN (versionCode 21, English edition, beta)
 
 ### Fixed
