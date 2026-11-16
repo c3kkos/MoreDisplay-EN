@@ -120,6 +120,14 @@
             </intent-filter>
         </receiver>
 
+        <!-- Settings and status from a computer (adb shell content call). Exported so the adb shell can reach
+             it; AdbControlProvider refuses every caller except the shell and root. -->
+        <provider
+            android:name=".adb.AdbControlProvider"
+            android:authorities="${applicationId}.adb"
+            android:exported="true"
+            tools:ignore="ExportedContentProvider" />
+
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"

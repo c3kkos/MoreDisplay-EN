@@ -16,6 +16,10 @@ always exactly 3 s apart, with sound on or off.
   Now the full step is asked for when the range would leave less than half of it.
 
 ### Added
+- **Every setting from adb**, without touching the screen: `adb shell content call --uri
+  content://io.github.ynkcc.moredisplay.adb --method help|get|set|status` (see the README). It covers all the eye,
+  touch and cast settings, and `status` prints the cast's live counters. Only the adb shell and root may use it;
+  other apps are refused.
 - **Request log** (`adb logcat -s MoreDisplay_Hls`): every playlist reload with the time since the last one, and
   every segment fetch with how many newer segments were already finished, which is the TV's real distance from the
   newest edge, measured on the tablet. The 10 s stats line (`MoreDisplay_Cast`) shows the latest values too.
