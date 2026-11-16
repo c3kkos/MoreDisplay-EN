@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.8.3-beta4-EN (versionCode 19, English edition, beta)
+
+### Fixed
+- **The last start-up pause:** with beta3 the Shield paused 0–2 times, always about 3 s in, just before the
+  start-up burst was released (no pauses after it, in 7 casts). The burst can now be released 2 s after the TV's
+  first request instead of 4 s.
+
 ## 1.8.3-beta3-EN (versionCode 18, English edition, beta)
 
 Third beta for the cast pauses at start-up. Beta2's request log showed that the Shield's player always plays at
@@ -9,7 +16,7 @@ after that it played without pauses (10-minute test).
 
 ### Fixed
 - **Start-up burst:** the playlist leaves out the 3 newest segments while the TV starts. Once the TV has reached
-  the edge of that shorter playlist (and at least 4 s after its first request), the 3 segments are listed at once,
+  the edge of that shorter playlist (and at least 4 s after its first request; 2 s since beta4), the 3 segments are listed at once,
   so the TV gets 6 s of reserve (3 s with Low delay) in one go instead of earning it through pauses. It's released
   after 30 s in any case. The log (`MoreDisplay_Hls`) says when and why it was released. The TV starts about 2 s
   later than before (6 segments ready instead of 5).
