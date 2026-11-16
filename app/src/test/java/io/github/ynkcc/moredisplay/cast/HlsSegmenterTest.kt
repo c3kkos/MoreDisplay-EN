@@ -56,6 +56,33 @@ class HlsSegmenterTest {
     }
 
     @Test
+    fun burst_holdsTheNewestSegmentsUntilReleased() {
+        val seg = HlsSegmenter(hasAudio = false, targetUs = 2_000_000, keep = 12, window = 8, burstSegments = 3)
+        feed(seg, 13) // 6 finished: seg0..seg5
+        assertEquals(5L, seg.newest())
+        assertEquals(2L, seg.newestListed())
+        assertTrue(seg.holding())
+        val held = seg.playlist()!!
+        assertTrue(held, held.contains("seg2.ts") && !held.contains("seg3.ts"))
+        assertNotNull(seg.segment(5)) // held segments can still be fetched
+        val (count, us) = seg.release()!!
+        assertEquals(3, count)
+        assertTrue("$us", us in 5_900_000L..6_100_000L) // 3 × ~2 s
+        assertTrue(!seg.holding())
+        assertEquals(5L, seg.newestListed())
+        assertTrue(seg.playlist()!!.contains("seg5.ts"))
+        assertEquals(null, seg.release()) // only once
+    }
+
+    @Test
+    fun burst_noPlaylistUntilASegmentIsListed() {
+        val seg = HlsSegmenter(hasAudio = false, targetUs = 2_000_000, burstSegments = 3)
+        feed(seg, 7) // 3 finished, all held
+        assertEquals(null, seg.playlist())
+        assertEquals(-1L, seg.newestListed())
+    }
+
+    @Test
     fun holdBack_isAnnouncedInThePlaylist() {
         val seg = HlsSegmenter(hasAudio = false, targetUs = 2_000_000, keep = 12, window = 8, holdBackUs = 8_000_000)
         feed(seg, 12)
@@ -72,7 +99,10 @@ class HlsSegmenterTest {
     fun castConfig_stabilitySettings() {
         val smooth = CastConfig()
         assertEquals(8_000_000L, smooth.holdBackUs)
-        assertEquals(5, smooth.segmentsBeforePlay)
+        assertEquals(6, smooth.segmentsBeforePlay)
+        // The burst must leave segments to list at start, and fit in what is kept downloadable.
+        assertTrue(smooth.segmentsBeforePlay > smooth.burstSegments)
+        assertTrue(smooth.segmentsKept >= smooth.playlistWindow + smooth.burstSegments)
         // The player must be able to start hold-back behind the newest segment within what the playlist lists.
         assertTrue(smooth.playlistWindow * smooth.segmentUs > smooth.holdBackUs)
         assertTrue(smooth.segmentsKept >= smooth.playlistWindow)

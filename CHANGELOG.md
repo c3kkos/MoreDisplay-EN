@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.8.3-beta3-EN (versionCode 18, English edition, beta)
+
+Third beta for the cast pauses at start-up. Beta2's request log showed that the Shield's player always plays at
+the newest listed segment: it ignores `HOLD-BACK`, and its seekable range is only about 2 s wide, so moving it
+back can't work. It paused 1–10 times in the first 30 s of every cast, until those pauses had built up a reserve;
+after that it played without pauses (10-minute test).
+
+### Fixed
+- **Start-up burst:** the playlist leaves out the 3 newest segments while the TV starts. Once the TV has reached
+  the edge of that shorter playlist (and at least 4 s after its first request), the 3 segments are listed at once,
+  so the TV gets 6 s of reserve (3 s with Low delay) in one go instead of earning it through pauses. It's released
+  after 30 s in any case. The log (`MoreDisplay_Hls`) says when and why it was released. The TV starts about 2 s
+  later than before (6 segments ready instead of 5).
+
 ## 1.8.3-beta2-EN (versionCode 17, English edition, beta)
 
 Second beta for the cast pauses, after testing beta1 on an NVIDIA Shield: every cast start paused 1–15 times,
