@@ -117,8 +117,7 @@
         <activity-alias
             android:name="io.github.c3kkos.moredisplay.CommandActivity"
             android:targetActivity=".CommandActivity"
-            android:exported="true"
-            android:excludeFromRecents="true" />
+            android:exported="true" />
 
         <receiver
             android:name=".BootReceiver"
