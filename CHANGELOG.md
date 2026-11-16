@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.8.3-beta7-EN (versionCode 21, English edition, beta)
+
+### Fixed
+- **CAST-06 on the first cast after MoreDisplay was closed while casting** (app update, force-stop, or Android
+  ending it in the background). The Cast library tried to resume the old session, the TV stayed "selected", and
+  the new cast's connection request did nothing, so it timed out after 30 s. MoreDisplay no longer resumes a saved
+  Cast session, and when the TV is still selected without a live session it clears that and selects it again.
+
 ## 1.8.3-beta6-EN (versionCode 20, English edition, beta)
 
 ### Fixed
