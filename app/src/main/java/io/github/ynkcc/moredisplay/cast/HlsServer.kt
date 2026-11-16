@@ -19,7 +19,8 @@ class HlsServer(private val segmenter: HlsSegmenter, private val address: InetAd
     companion object {
         private const val TAG = "MoreDisplay_Hls"
         private const val BURST_FALLBACK_MS = 30_000L
-        private const val BURST_SETTLE_MS = 4_000L
+        // 4 s in beta3: the Shield then paused once at ~3 s, just before the release.
+        private const val BURST_SETTLE_MS = 2_000L
     }
 
     private val token = UUID.randomUUID().toString().replace("-", "")
