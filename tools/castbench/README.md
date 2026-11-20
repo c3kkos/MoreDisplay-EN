@@ -20,6 +20,8 @@ real Cast receiver. Check the final result on a real TV.
 | `Bench.kt` | Plays a clip in real time through `HlsSegmenter` + `HlsServer` on 127.0.0.1 (Smooth settings, start-up burst). Prints the playlist URL. |
 | `Sim.kt` | Offline sound-path simulator: sound arrives on a sample clock that is *n* ppm off, 40 ms late, with pump stalls; runs `AudioEncoder`'s feeder loop with the current `AudioTimeline` or the 2.0.0 one (`OldAudioTimeline.kt`) and reports the flash-to-beep offset over time. 30 minutes take seconds. |
 | `receiver.html` | Shaka Player 4.12 + mux.js receiver. Measures, on actual playback, the flash-to-beep offset, pauses and the buffer. Results in `window.bench` (`bench.summary()` gives per-minute numbers). |
+| `server.py` | Serves `receiver.html` and saves what it reports (`POST /report?name=<run>` → `<reports>/<run>.json`). |
+| `live-run.sh` | One unattended live run: starts the bench, waits for 6 segments like the app, plays the stream in **headless Edge** (its own profile folder; closed afterwards), prints the per-minute results. Headless pages aren't throttled; the in-app browser pane is, when its window isn't in front. |
 | `run-tests.sh`, `TestRunner.kt`, `stubs/` | Runs the cast unit tests without Gradle (minimal JUnit and Android stand-ins). |
 
 ## Use
@@ -36,11 +38,20 @@ FF=<path>/ffmpeg.exe; KC=<path>/kotlinc/bin/kotlinc.bat; DATA=<work dir outside 
 java -cp "$DATA/bench.jar" castbench.SimKt "$DATA/audio.pcm" old 200 30
 java -cp "$DATA/bench.jar" castbench.SimKt "$DATA/audio.pcm" new 200 30
 
-# Live: serve the stream and the receiver page, then open the page and press Start (keep it visible:
-# hidden pages don't paint video frames)
+# Live, unattended (headless Edge): keep the server running, then one run per stream
+python server.py "$DATA/reports" 8765 &
+./live-run.sh "$DATA/bench.jar" "$DATA/video.h264" "$DATA/audio.aac" 10 baseline "$DATA/reports"
+
+# Live, by hand: start the bench, open the page in a visible browser and press Start
 java -cp "$DATA/bench.jar" castbench.BenchKt "$DATA/video.h264" "$DATA/audio.aac" 0 10
-python -m http.server 8765 --bind 127.0.0.1
 #   http://127.0.0.1:8765/receiver.html?src=<playlist URL printed by the bench>
+
+# A clock-error case end to end: the processed sound from Sim, and the picture retimed the same way
+java -cp "$DATA/bench.jar" castbench.SimKt "$DATA/audio.pcm" new 1000 7 0 "$DATA/p.pcm"
+"$FF" -f s16le -ar 48000 -ac 2 -i "$DATA/p.pcm" -c:a aac -b:a 128k -f adts "$DATA/p.aac"
+"$FF" -f h264 -r 30 -i "$DATA/video.h264" -t 430 -vf "setpts=PTS/1.001,fps=30" -c:v libx264 -bf 0 -g 30 \
+  -keyint_min 30 -sc_threshold 0 -x264-params aud=1 -f h264 "$DATA/v.h264"
+./live-run.sh "$DATA/bench.jar" "$DATA/v.h264" "$DATA/p.aac" 6.5 new-1000 "$DATA/reports"
 ```
 
 `Bench` takes an optional drift in ms per minute that shifts the sound's *timestamps*: a calibration showed that
