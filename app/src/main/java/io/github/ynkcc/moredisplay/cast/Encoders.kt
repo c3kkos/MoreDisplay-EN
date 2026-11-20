@@ -126,8 +126,9 @@ class VideoEncoder(
 /**
  * AAC-LC encoder for the cast sound: reads 48 kHz stereo 16-bit PCM from the pipe filled by system_server and
  * emits ADTS frames. Timestamps follow the same clock as the video (`System.nanoTime`) and form one gapless track
- * ([AudioTimeline]): silence fills the time when nothing plays, and a backlog is dropped instead of being stamped
- * ahead of the clock.
+ * ([AudioTimeline]): silence fills the time when nothing plays, a backlog is dropped instead of being stamped
+ * ahead of the clock, and the number of samples follows the picture clock (Cast players play the samples back to
+ * back, so that is what keeps sound and picture together).
  */
 class AudioEncoder(
     private val pipe: ParcelFileDescriptor,
@@ -178,6 +179,9 @@ class AudioEncoder(
     val silenceMs: Long get() = timeline?.silenceMs ?: 0
     val droppedMs: Long get() = timeline?.droppedMs ?: 0
 
+    /** Net sound added (+) or removed (-) to follow the clock, in ms (diagnostics). */
+    val clockMs: Long get() = timeline?.clockMs ?: 0
+
     private fun feedLoop() {
         val chunk = ByteArray(CHUNK)
         val silence = ByteArray(CHUNK)
@@ -188,10 +192,10 @@ class AudioEncoder(
             if (available >= CHANNELS * 2) {
                 val n = runCatching { input.read(chunk, 0, minOf(available, chunk.size) and 3.inv()) }.getOrElse { break }
                 if (n < 0) break
-                val keep = tl.admit(n, nowUs)
-                if (keep > 0) {
-                    queue(chunk, n - keep, keep, tl.nextUs)
-                    tl.advance(keep)
+                val sound = tl.take(chunk, 0, n, nowUs)
+                if (sound.isNotEmpty()) {
+                    queue(sound, 0, sound.size, tl.nextUs)
+                    tl.advance(sound.size)
                 }
                 continue
             }

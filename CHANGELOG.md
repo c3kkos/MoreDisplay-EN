@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.0.1-beta1-EN (versionCode 26, English edition, beta)
+
+### Fixed
+- **Sound drifting away from the picture during a long cast** (reported after about 20 minutes, on a Shield and
+  on a TV with Chromecast built in). Two causes, both in how the cast sound is timed:
+  - When system_server's sound pump stalled for a moment (100–200 ms, normal on a busy tablet), MoreDisplay took
+    the pause for silent apps and added silence; the stalled sound then came after it, so all later sound played
+    later. Each stall could add to it, up to about a quarter of a second. Silence is now added only after 500 ms
+    without any sound.
+  - Cast players play the sound's samples back to back and ignore their timestamps, so the number of samples
+    must follow the picture's clock. It only did so loosely (up to 0.1–0.2 s off, then a jump). Now the sound is
+    kept within about 15 ms: each 20 ms piece is stretched or shrunk by a sample when needed (inaudible), and
+    when the apps make sound again after a silence it is put back exactly in step.
+
+  Measured on the PC test bench (30 minutes, pump stalls, sound clock 0.02–0.1% off): the worst offset went from
+  +120–244 ms to ±20–30 ms. **Not yet checked on a TV.**
+
+### Added
+- The cast card's *Sound* line and the log show the clock correction (sound added or removed to stay in step).
+- `tools/castbench/`: a PC test bench for the cast stream (the app's stream code + Shaka Player in a browser),
+  and a way to run the cast unit tests without Gradle.
+
 ## 2.0.0-EN (versionCode 25, English edition)
 
 The English edition becomes its own app. Same features as 1.9.0.

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cast bench receiver</title>
+<style>
+  :root { color-scheme: dark; --bg: #111; --fg: #ddd; --dim: #888; --ok: #6c6; --bad: #e66; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
+  video { width: 320px; height: 180px; background: #000; display: block; margin-bottom: 8px; }
+  button { font: inherit; padding: 6px 14px; }
+  #status { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px; color: var(--dim); }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/mux.js@7.0.3/dist/mux.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/shaka-player@4.12.6/dist/shaka-player.compiled.js"></script>
+</head>
+<body>
+<!--
+  Cast bench receiver: plays the bench's HLS stream with Shaka Player (the player family of Google's Default Media
+  Receiver) and measures, on actual playback, the offset between each white flash and its beep (positive = the
+  sound comes after the picture), plus pauses and the distance from the live edge. Results: window.bench.
+  Open as receiver.html?src=<playlist URL>, then press Start (the audio analysis needs a click).
+-->
+<video id="v" playsinline></video>
+<button id="start">Start</button>
+<div id="status">waiting for Start</div>
+<script>
+const src = new URLSearchParams(location.search).get('src');
+const v = document.getElementById('v');
+const status = document.getElementById('status');
+const bench = window.bench = { flashes: [], beeps: [], pairs: [], events: [], samples: [], started: 0 };
+const now = () => performance.now();
+const unpaired = []; // beeps waiting for their flash (it may show up to a second later)
+const log = (type, data) => bench.events.push({ t: Math.round(now() - bench.started), type, ...data });
+
+function pair(beep) {
+  // The flash nearest to this beep (they are 2 s apart, so +-1 s is unambiguous).
+  let best = null;
+  for (const f of bench.flashes) if (Math.abs(beep - f) < 1000 && (!best || Math.abs(beep - f) < Math.abs(beep - best))) best = f;
+  if (best !== null) bench.pairs.push({ t: Math.round((best - bench.started) / 1000), offsetMs: Math.round(beep - best) });
+}
+
+function watchFlashes() {
+  const c = document.createElement('canvas'); c.width = 16; c.height = 9;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  let bright = false;
+  const onFrame = (_, meta) => {
+    try {
+      g.drawImage(v, 0, 0, 16, 9);
+      const d = g.getImageData(0, 0, 16, 9).data;
+      let sum = 0; for (let i = 0; i < d.length; i += 4) sum += d[i + 1];
+      const lum = sum / (d.length / 4);
+      if (!bright && lum > 128) bench.flashes.push(meta.expectedDisplayTime);
+      bright = lum > 128;
+      if (bench.flashes.length > 2000) bench.flashes.splice(0, 1000);
+    } catch (e) { log('flash-error', { message: String(e) }); }
+    v.requestVideoFrameCallback(onFrame); // always re-arm, even after an error
+  };
+  v.requestVideoFrameCallback(onFrame);
+}
+
+function watchBeeps(ctx) {
+  const srcNode = ctx.createMediaElementSource(v);
+  const an = ctx.createAnalyser(); an.fftSize = 32768; // 680 ms: a late poll still sees the whole beep
+  const mute = ctx.createGain(); mute.gain.value = 0;
+  srcNode.connect(an); an.connect(mute); mute.connect(ctx.destination);
+  const buf = new Float32Array(an.fftSize);
+  let lastOnsetCtx = -10;
+  setInterval(() => {
+    // Find beep onsets (loud after 200 ms of quiet) anywhere in the last 680 ms; count each once.
+    an.getFloatTimeDomainData(buf);
+    const t = ctx.currentTime, sr = ctx.sampleRate, quietNeeded = Math.round(0.2 * sr);
+    let quiet = 0;
+    for (let i = 0; i < buf.length; i++) {
+      if (Math.abs(buf[i]) > 0.2) {
+        if (quiet >= quietNeeded) {
+          const onsetCtx = t - (buf.length - i) / sr;
+          if (onsetCtx > lastOnsetCtx + 1) {
+            lastOnsetCtx = onsetCtx;
+            const ts = ctx.getOutputTimestamp();
+            const perf = ts.performanceTime + (onsetCtx - ts.contextTime) * 1000;
+            bench.beeps.push(perf); unpaired.push(perf);
+          }
+        }
+        quiet = 0;
+      } else quiet++;
+    }
+  }, 100);
+}
+
+async function start() {
+  document.getElementById('start').disabled = true;
+  bench.started = now();
+  shaka.polyfill.installAll();
+  const player = window.player = new shaka.Player();
+  await player.attach(v);
+  player.addEventListener('buffering', e => log(e.buffering ? 'pause' : 'resume', { media: +v.currentTime.toFixed(2) }));
+  player.addEventListener('error', e => log('error', { code: e.detail && e.detail.code }));
+  const ctx = new AudioContext({ sampleRate: 48000 });
+  watchBeeps(ctx); watchFlashes();
+  await player.load(src);
+  await v.play();
+  setInterval(() => {
+    while (unpaired.length && unpaired[0] < now() - 1500) pair(unpaired.shift());
+  }, 500);
+  setInterval(() => {
+    const r = player.seekRange(), b = v.buffered;
+    const ahead = b.length ? b.end(b.length - 1) - v.currentTime : 0;
+    const s = { t: Math.round((now() - bench.started) / 1000), behindEdge: +(r.end - v.currentTime).toFixed(2), bufferedAhead: +ahead.toFixed(2) };
+    bench.samples.push(s);
+    const recent = bench.pairs.slice(-5).map(p => p.offsetMs);
+    const pauses = bench.events.filter(e => e.type === 'pause').length;
+    status.textContent = `t=${s.t}s  pauses=${pauses}  behind edge=${s.behindEdge}s  buffered ahead=${s.bufferedAhead}s\n` +
+      `flash/beep pairs=${bench.pairs.length}  last offsets (ms): ${recent.join(', ')}`;
+  }, 2000);
+}
+
+/** Per-minute summary: median offset, pauses, buffered ahead. */
+bench.summary = () => {
+  const out = [];
+  const maxMin = Math.ceil((bench.samples.at(-1)?.t || 0) / 60);
+  for (let m = 0; m < maxMin; m++) {
+    const offs = bench.pairs.filter(p => p.t >= m * 60 && p.t < (m + 1) * 60).map(p => p.offsetMs).sort((a, b) => a - b);
+    const smp = bench.samples.filter(s => s.t >= m * 60 && s.t < (m + 1) * 60);
+    out.push({ minute: m, pairs: offs.length, medianOffsetMs: offs.length ? offs[offs.length >> 1] : null,
+      minOff: offs[0] ?? null, maxOff: offs.at(-1) ?? null,
+      pauses: bench.events.filter(e => e.type === 'pause' && e.t >= m * 60000 && e.t < (m + 1) * 60000).length,
+      bufferedAhead: smp.length ? Math.min(...smp.map(s => s.bufferedAhead)) : null });
+  }
+  return out;
+};
+
+document.getElementById('start').onclick = start;
+if (!src) status.textContent = 'add ?src=<playlist URL>';
+
+// Unattended runs (headless browser started with --autoplay-policy=no-user-gesture-required):
+// &auto=1 starts at once, &report=<name> posts the results to server.py every 10 s.
+const params = new URLSearchParams(location.search);
+if (src && params.get('auto') === '1') start().catch(e => log('start-error', { message: String(e) }));
+window.addEventListener('error', e => log('page-error', { message: String(e.message) }));
+const reportName = params.get('report');
+if (reportName) {
+  setInterval(() => {
+    const stats = window.player ? window.player.getStats() : {};
+    fetch('/report?name=' + encodeURIComponent(reportName), {
+      method: 'POST',
+      body: JSON.stringify({
+        summary: bench.summary(), pairs: bench.pairs, events: bench.events,
+        flashes: bench.flashes.length, beeps: bench.beeps.length,
+        decodedFrames: stats.decodedFrames, droppedFrames: stats.droppedFrames, mediaTime: v.currentTime
+      })
+    }).catch(() => {});
+  }, 10000);
+}
+</script>
+</body>
+</html>

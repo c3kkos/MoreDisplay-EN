@@ -139,7 +139,8 @@ class CastService : Service() {
                     sendMbps = now.sendMbps,
                     hasSound = now.hasSound,
                     silenceMs = now.silenceMs,
-                    droppedMs = now.droppedMs
+                    droppedMs = now.droppedMs,
+                    clockMs = now.clockMs
                 )
             )
             previous = now
