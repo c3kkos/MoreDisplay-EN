@@ -195,7 +195,8 @@ private fun CastCounters() {
             )
             if (it.hasSound) {
                 Text(
-                    "Sound: +${f(it.silenceMs / 1_000f)} s silence added, −${f(it.droppedMs / 1_000f)} s dropped",
+                    "Sound: +${f(it.silenceMs / 1_000f)} s silence added, −${f(it.droppedMs / 1_000f)} s dropped, " +
+                        "${if (it.clockMs >= 0) "+" else "−"}${kotlin.math.abs(it.clockMs)} ms clock correction",
                     style = style, color = color
                 )
             }

@@ -14,7 +14,9 @@ data class TabletStats(
     val hasSound: Boolean,
     /** Silence added / sound dropped to keep the sound track gapless, ms in total. */
     val silenceMs: Long,
-    val droppedMs: Long
+    val droppedMs: Long,
+    /** Net sound added (+) or removed (-) to keep in step with the picture clock, ms in total. */
+    val clockMs: Long = 0
 )
 
 /** What the TV's player reports (shown on the cast card). */
